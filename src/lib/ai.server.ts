@@ -172,9 +172,9 @@ export type ShoppingAnalysis = {
 
 export async function analyzeShoppingProduct(input: {
   productName: string;
-  productUrl?: string;
-  notes?: string;
-  imageDataUrl?: string;
+  productUrl?: string | undefined;
+  notes?: string | undefined;
+  imageDataUrl?: string | undefined;
   wardrobeSummary: string;
   profileSummary: string;
 }): Promise<ShoppingAnalysis> {
