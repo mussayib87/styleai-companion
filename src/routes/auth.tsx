@@ -125,12 +125,13 @@ function AuthPage() {
       return;
     }
 
+    const displayName = values.displayName?.trim();
     const { data, error } = await supabase.auth.signUp({
       email,
       password: values.password,
       options: {
         emailRedirectTo: `${window.location.origin}/`,
-        data: values.displayName?.trim() ? { display_name: values.displayName.trim() } : undefined,
+        ...(displayName ? { data: { display_name: displayName } } : {}),
       },
     });
     if (error) {
