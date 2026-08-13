@@ -17,7 +17,6 @@ import { Route as FavoritesRouteImport } from './routes/favorites'
 import { Route as OnboardingRouteImport } from './routes/onboarding'
 import { Route as PlannerRouteImport } from './routes/planner'
 import { Route as ProfileRouteImport } from './routes/profile'
-import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as ShoppingRouteImport } from './routes/shopping'
 import { Route as StylistRouteImport } from './routes/stylist'
@@ -65,11 +64,6 @@ const ProfileRoute = ProfileRouteImport.update({
   path: '/profile',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ResetPasswordRoute = ResetPasswordRouteImport.update({
-  id: '/reset-password',
-  path: '/reset-password',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const SettingsRoute = SettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
@@ -110,7 +104,6 @@ export interface FileRoutesByFullPath {
   '/onboarding': typeof OnboardingRoute
   '/planner': typeof PlannerRoute
   '/profile': typeof ProfileRoute
-  '/reset-password': typeof ResetPasswordRoute
   '/settings': typeof SettingsRoute
   '/shopping': typeof ShoppingRoute
   '/stylist': typeof StylistRoute
@@ -127,7 +120,6 @@ export interface FileRoutesByTo {
   '/onboarding': typeof OnboardingRoute
   '/planner': typeof PlannerRoute
   '/profile': typeof ProfileRoute
-  '/reset-password': typeof ResetPasswordRoute
   '/settings': typeof SettingsRoute
   '/shopping': typeof ShoppingRoute
   '/stylist': typeof StylistRoute
@@ -145,7 +137,6 @@ export interface FileRoutesById {
   '/onboarding': typeof OnboardingRoute
   '/planner': typeof PlannerRoute
   '/profile': typeof ProfileRoute
-  '/reset-password': typeof ResetPasswordRoute
   '/settings': typeof SettingsRoute
   '/shopping': typeof ShoppingRoute
   '/stylist': typeof StylistRoute
@@ -164,7 +155,6 @@ export interface FileRouteTypes {
     | '/onboarding'
     | '/planner'
     | '/profile'
-    | '/reset-password'
     | '/settings'
     | '/shopping'
     | '/stylist'
@@ -181,7 +171,6 @@ export interface FileRouteTypes {
     | '/onboarding'
     | '/planner'
     | '/profile'
-    | '/reset-password'
     | '/settings'
     | '/shopping'
     | '/stylist'
@@ -198,7 +187,6 @@ export interface FileRouteTypes {
     | '/onboarding'
     | '/planner'
     | '/profile'
-    | '/reset-password'
     | '/settings'
     | '/shopping'
     | '/stylist'
@@ -216,7 +204,6 @@ export interface RootRouteChildren {
   OnboardingRoute: typeof OnboardingRoute
   PlannerRoute: typeof PlannerRoute
   ProfileRoute: typeof ProfileRoute
-  ResetPasswordRoute: typeof ResetPasswordRoute
   SettingsRoute: typeof SettingsRoute
   ShoppingRoute: typeof ShoppingRoute
   StylistRoute: typeof StylistRoute
@@ -283,13 +270,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProfileRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/reset-password': {
-      id: '/reset-password'
-      path: '/reset-password'
-      fullPath: '/reset-password'
-      preLoaderRoute: typeof ResetPasswordRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/settings': {
       id: '/settings'
       path: '/settings'
@@ -344,7 +324,6 @@ const rootRouteChildren: RootRouteChildren = {
   OnboardingRoute: OnboardingRoute,
   PlannerRoute: PlannerRoute,
   ProfileRoute: ProfileRoute,
-  ResetPasswordRoute: ResetPasswordRoute,
   SettingsRoute: SettingsRoute,
   ShoppingRoute: ShoppingRoute,
   StylistRoute: StylistRoute,
