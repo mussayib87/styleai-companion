@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { AppShell } from "@/components/styleai/app-shell";
 
-export const Route = createFileRoute("/wardrobe")({
+export const Route = createFileRoute("/wardrobe/")({
   head: () => ({
     meta: [
       { title: "My Wardrobe — StyleAI" },

@@ -10,33 +10,180 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AnalyticsRouteImport } from './routes/analytics'
+import { Route as CalendarRouteImport } from './routes/calendar'
+import { Route as FavoritesRouteImport } from './routes/favorites'
+import { Route as PlannerRouteImport } from './routes/planner'
+import { Route as ProfileRouteImport } from './routes/profile'
+import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as ShoppingRouteImport } from './routes/shopping'
+import { Route as StylistRouteImport } from './routes/stylist'
+import { Route as TryOnRouteImport } from './routes/try-on'
+import { Route as WardrobeIndexRouteImport } from './routes/wardrobe.index'
+import { Route as WardrobeAddRouteImport } from './routes/wardrobe.add'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AnalyticsRoute = AnalyticsRouteImport.update({
+  id: '/analytics',
+  path: '/analytics',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CalendarRoute = CalendarRouteImport.update({
+  id: '/calendar',
+  path: '/calendar',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const FavoritesRoute = FavoritesRouteImport.update({
+  id: '/favorites',
+  path: '/favorites',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PlannerRoute = PlannerRouteImport.update({
+  id: '/planner',
+  path: '/planner',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ProfileRoute = ProfileRouteImport.update({
+  id: '/profile',
+  path: '/profile',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SettingsRoute = SettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ShoppingRoute = ShoppingRouteImport.update({
+  id: '/shopping',
+  path: '/shopping',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const StylistRoute = StylistRouteImport.update({
+  id: '/stylist',
+  path: '/stylist',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TryOnRoute = TryOnRouteImport.update({
+  id: '/try-on',
+  path: '/try-on',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const WardrobeIndexRoute = WardrobeIndexRouteImport.update({
+  id: '/wardrobe/',
+  path: '/wardrobe/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const WardrobeAddRoute = WardrobeAddRouteImport.update({
+  id: '/wardrobe/add',
+  path: '/wardrobe/add',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/analytics': typeof AnalyticsRoute
+  '/calendar': typeof CalendarRoute
+  '/favorites': typeof FavoritesRoute
+  '/planner': typeof PlannerRoute
+  '/profile': typeof ProfileRoute
+  '/settings': typeof SettingsRoute
+  '/shopping': typeof ShoppingRoute
+  '/stylist': typeof StylistRoute
+  '/try-on': typeof TryOnRoute
+  '/wardrobe/add': typeof WardrobeAddRoute
+  '/wardrobe/': typeof WardrobeIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/analytics': typeof AnalyticsRoute
+  '/calendar': typeof CalendarRoute
+  '/favorites': typeof FavoritesRoute
+  '/planner': typeof PlannerRoute
+  '/profile': typeof ProfileRoute
+  '/settings': typeof SettingsRoute
+  '/shopping': typeof ShoppingRoute
+  '/stylist': typeof StylistRoute
+  '/try-on': typeof TryOnRoute
+  '/wardrobe/add': typeof WardrobeAddRoute
+  '/wardrobe': typeof WardrobeIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/analytics': typeof AnalyticsRoute
+  '/calendar': typeof CalendarRoute
+  '/favorites': typeof FavoritesRoute
+  '/planner': typeof PlannerRoute
+  '/profile': typeof ProfileRoute
+  '/settings': typeof SettingsRoute
+  '/shopping': typeof ShoppingRoute
+  '/stylist': typeof StylistRoute
+  '/try-on': typeof TryOnRoute
+  '/wardrobe/add': typeof WardrobeAddRoute
+  '/wardrobe/': typeof WardrobeIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    | '/'
+    | '/analytics'
+    | '/calendar'
+    | '/favorites'
+    | '/planner'
+    | '/profile'
+    | '/settings'
+    | '/shopping'
+    | '/stylist'
+    | '/try-on'
+    | '/wardrobe/add'
+    | '/wardrobe/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to:
+    | '/'
+    | '/analytics'
+    | '/calendar'
+    | '/favorites'
+    | '/planner'
+    | '/profile'
+    | '/settings'
+    | '/shopping'
+    | '/stylist'
+    | '/try-on'
+    | '/wardrobe/add'
+    | '/wardrobe'
+  id:
+    | '__root__'
+    | '/'
+    | '/analytics'
+    | '/calendar'
+    | '/favorites'
+    | '/planner'
+    | '/profile'
+    | '/settings'
+    | '/shopping'
+    | '/stylist'
+    | '/try-on'
+    | '/wardrobe/add'
+    | '/wardrobe/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AnalyticsRoute: typeof AnalyticsRoute
+  CalendarRoute: typeof CalendarRoute
+  FavoritesRoute: typeof FavoritesRoute
+  PlannerRoute: typeof PlannerRoute
+  ProfileRoute: typeof ProfileRoute
+  SettingsRoute: typeof SettingsRoute
+  ShoppingRoute: typeof ShoppingRoute
+  StylistRoute: typeof StylistRoute
+  TryOnRoute: typeof TryOnRoute
+  WardrobeAddRoute: typeof WardrobeAddRoute
+  WardrobeIndexRoute: typeof WardrobeIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -48,11 +195,99 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/analytics': {
+      id: '/analytics'
+      path: '/analytics'
+      fullPath: '/analytics'
+      preLoaderRoute: typeof AnalyticsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/calendar': {
+      id: '/calendar'
+      path: '/calendar'
+      fullPath: '/calendar'
+      preLoaderRoute: typeof CalendarRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/favorites': {
+      id: '/favorites'
+      path: '/favorites'
+      fullPath: '/favorites'
+      preLoaderRoute: typeof FavoritesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/planner': {
+      id: '/planner'
+      path: '/planner'
+      fullPath: '/planner'
+      preLoaderRoute: typeof PlannerRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/profile': {
+      id: '/profile'
+      path: '/profile'
+      fullPath: '/profile'
+      preLoaderRoute: typeof ProfileRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/settings': {
+      id: '/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof SettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/shopping': {
+      id: '/shopping'
+      path: '/shopping'
+      fullPath: '/shopping'
+      preLoaderRoute: typeof ShoppingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/stylist': {
+      id: '/stylist'
+      path: '/stylist'
+      fullPath: '/stylist'
+      preLoaderRoute: typeof StylistRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/try-on': {
+      id: '/try-on'
+      path: '/try-on'
+      fullPath: '/try-on'
+      preLoaderRoute: typeof TryOnRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/wardrobe/': {
+      id: '/wardrobe/'
+      path: '/wardrobe'
+      fullPath: '/wardrobe/'
+      preLoaderRoute: typeof WardrobeIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/wardrobe/add': {
+      id: '/wardrobe/add'
+      path: '/wardrobe/add'
+      fullPath: '/wardrobe/add'
+      preLoaderRoute: typeof WardrobeAddRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AnalyticsRoute: AnalyticsRoute,
+  CalendarRoute: CalendarRoute,
+  FavoritesRoute: FavoritesRoute,
+  PlannerRoute: PlannerRoute,
+  ProfileRoute: ProfileRoute,
+  SettingsRoute: SettingsRoute,
+  ShoppingRoute: ShoppingRoute,
+  StylistRoute: StylistRoute,
+  TryOnRoute: TryOnRoute,
+  WardrobeAddRoute: WardrobeAddRoute,
+  WardrobeIndexRoute: WardrobeIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
