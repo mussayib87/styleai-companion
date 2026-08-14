@@ -35,19 +35,31 @@ function AuthPage() {
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true);
-    const fn =
-      mode === "signin"
-        ? supabase.auth.signInWithPassword({ email, password })
-        : supabase.auth.signUp({
-            email,
-            password,
-            options: { emailRedirectTo: `${window.location.origin}/` },
-          });
-    const { error } = await fn;
+    if (mode === "signin") {
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      setBusy(false);
+      if (error) toast.error(error.message);
+      else navigate({ to: "/", replace: true });
+      return;
+    }
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: { emailRedirectTo: `${window.location.origin}/` },
+    });
     setBusy(false);
-    if (error) toast.error(error.message);
-    else navigate({ to: "/", replace: true });
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    if (data.session) {
+      navigate({ to: "/", replace: true });
+    } else {
+      setMode("signin");
+      toast.success("Check your inbox to confirm your email, then sign in.");
+    }
   }
+
 
   return (
     <div className="grid min-h-screen place-items-center px-5 py-10">
