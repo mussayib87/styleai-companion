@@ -49,9 +49,10 @@ function Home() {
         items,
         {
           occasion: "Casual",
-          ...(prefs?.color_preference ? { colorPreference: prefs.color_preference } : {}),
-          ...(prefs?.style_preference ? { stylePreference: prefs.style_preference } : {}),
-          ...(prefs?.fit_preference ? { fitPreference: prefs.fit_preference } : {}),
+          ...(prefs?.colors?.length ? { preferredColors: prefs.colors } : {}),
+          ...(prefs?.styles?.length ? { preferredStyles: prefs.styles } : {}),
+          ...(prefs?.fit ? { preferredFit: prefs.fit } : {}),
+
         },
         3,
       ),
@@ -113,7 +114,7 @@ function Home() {
           ) : outfits.length ? (
             <div className="grid gap-3 sm:grid-cols-2">
               {outfits.map((o, i) => (
-                <OutfitCard key={o.id} outfit={o} rank={i + 1} />
+                <OutfitCard key={o.key} outfit={o} rank={i + 1} />
               ))}
             </div>
           ) : (
