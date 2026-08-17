@@ -481,6 +481,31 @@ export function useToggleFavoriteItem() {
   });
 }
 
+export function useToggleFavoriteOutfit() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ outfitId, on }: { outfitId: string; on: boolean }) => {
+      const { data: auth } = await supabase.auth.getUser();
+      const user_id = auth.user?.id;
+      if (!user_id) throw new Error("no session");
+      if (on) {
+        const { error } = await supabase
+          .from("favorites")
+          .insert({ user_id, kind: "outfit", outfit_id: outfitId } as never);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from("favorites")
+          .delete()
+          .eq("kind", "outfit")
+          .eq("outfit_id", outfitId);
+        if (error) throw error;
+      }
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["favorites"] }),
+  });
+}
+
 /* ---------------- shopping ---------------- */
 
 export type AnalysisRow = {
