@@ -1,3 +1,6 @@
+import { Type } from "@google/genai";
+import type { StyleProfile } from "./styleai/types";
+
 /**
  * AI provider boundary. Everything model-specific lives here, so the provider
  * can be swapped without touching product code.
@@ -5,6 +8,8 @@
 
 const GATEWAY = "https://ai.gateway.lovable.dev/v1/chat/completions";
 const MODEL = "google/gemini-3.5-flash";
+const STYLE_PROFILE_TIMEOUT_MS = 30_000;
+const GEMINI_REQUEST_TIMEOUT_MS = 10_000;
 
 export type ClothingAnalysis = {
   name: string;
@@ -22,10 +27,209 @@ function key(): string | undefined {
   return process.env["LOVABLE_API_KEY"];
 }
 
-async function chat(
-  messages: unknown[],
-  opts: { json?: boolean } = {},
-): Promise<string> {
+function geminiKey(): string | undefined {
+  return process.env["GEMINI_API_KEY"];
+}
+
+function normalizeGeminiError(error: unknown): Error {
+  const markerStatus = error instanceof Error && error.message.match(/^GEMINI_HTTP_(\d+)$/)?.[1];
+  if (markerStatus) {
+    return normalizeGeminiError({ status: Number(markerStatus) });
+  }
+  if (error instanceof Error && error.message.startsWith("GEMINI_")) return error;
+
+  const status =
+    error && typeof error === "object" && "status" in error && typeof error.status === "number"
+      ? error.status
+      : undefined;
+  if (status === 503) return new Error("GEMINI_OVERLOADED");
+  if (status === 429) return new Error("GEMINI_RATE_LIMITED");
+  if (status === 400) return new Error("GEMINI_BAD_REQUEST");
+  if (status === 401 || status === 403) return new Error("GEMINI_AUTH_ERROR");
+  return new Error("GEMINI_REQUEST_FAILED");
+}
+
+function geminiStatus(error: unknown): number | undefined {
+  return error && typeof error === "object" && "status" in error && typeof error.status === "number"
+    ? error.status
+    : undefined;
+}
+
+const STYLE_PROFILE_SCHEMA = {
+  type: Type.OBJECT,
+  properties: {
+    summary: { type: Type.STRING },
+    face: { type: Type.OBJECT, properties: { shape: { type: Type.STRING } }, required: ["shape"] },
+    hair: {
+      type: Type.OBJECT,
+      properties: { description: { type: Type.STRING } },
+      required: ["description"],
+    },
+    silhouette: {
+      type: Type.OBJECT,
+      properties: { description: { type: Type.STRING } },
+      required: ["description"],
+    },
+    best_colors: { type: Type.ARRAY, items: { type: Type.STRING } },
+    recommended_fits: { type: Type.ARRAY, items: { type: Type.STRING } },
+    recommended_silhouettes: { type: Type.ARRAY, items: { type: Type.STRING } },
+    recommended_styles: { type: Type.ARRAY, items: { type: Type.STRING } },
+    recommended_items: {
+      type: Type.ARRAY,
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          category: { type: Type.STRING },
+          item: { type: Type.STRING },
+          color: { type: Type.STRING },
+          fit: { type: Type.STRING },
+          reason: { type: Type.STRING },
+        },
+        required: ["category", "item", "color", "fit", "reason"],
+      },
+    },
+  },
+  required: [
+    "summary",
+    "face",
+    "hair",
+    "silhouette",
+    "best_colors",
+    "recommended_fits",
+    "recommended_silhouettes",
+    "recommended_styles",
+    "recommended_items",
+  ],
+} as const;
+
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((item) => typeof item === "string");
+}
+
+function isStyleProfile(value: unknown): value is StyleProfile {
+  if (!value || typeof value !== "object") return false;
+  const profile = value as Record<string, unknown>;
+  const face = profile.face as Record<string, unknown> | null;
+  const hair = profile.hair as Record<string, unknown> | null;
+  const silhouette = profile.silhouette as Record<string, unknown> | null;
+  const items = profile.recommended_items;
+  return (
+    typeof profile.summary === "string" &&
+    !!face &&
+    typeof face.shape === "string" &&
+    !!hair &&
+    typeof hair.description === "string" &&
+    !!silhouette &&
+    typeof silhouette.description === "string" &&
+    isStringArray(profile.best_colors) &&
+    isStringArray(profile.recommended_fits) &&
+    isStringArray(profile.recommended_silhouettes) &&
+    isStringArray(profile.recommended_styles) &&
+    Array.isArray(items) &&
+    items.every((item) => {
+      if (!item || typeof item !== "object") return false;
+      const recommendation = item as Record<string, unknown>;
+      return ["category", "item", "color", "fit", "reason"].every(
+        (key) => typeof recommendation[key] === "string",
+      );
+    })
+  );
+}
+
+export async function analyzeStyleProfile(imageDataUrl: string): Promise<StyleProfile> {
+  const apiKey = geminiKey();
+  if (!apiKey) throw new Error("GEMINI_NOT_CONFIGURED");
+  const match = imageDataUrl.match(/^data:image\/(jpeg|jpg|png|webp|gif);base64,/);
+  if (!match) throw new Error("INVALID_IMAGE");
+
+  try {
+    const requestStartedAt = Date.now();
+    if (process.env["NODE_ENV"] !== "production") {
+      console.info(
+        `[StyleAI] style profile image payload: ${(imageDataUrl.length / 1024 / 1024).toFixed(2)} MB`,
+      );
+    }
+    const requestBody = {
+      contents: [
+        {
+          role: "user",
+          parts: [
+            {
+              text: `You are StyleAI's personal fashion stylist. Analyze this uploaded image for clothing and style recommendations and return ONLY the requested structured JSON.
+
+Focus on visible face shape where reasonably observable, visible hair characteristics, general clothing-relevant silhouette and proportions, current visible clothing and style, flattering colors, suitable fits, suitable silhouettes, suitable fashion styles, and concrete clothing items to shop for.
+
+Use wording such as "appears" or "suggests" where certainty is limited. Analyze only visible characteristics useful for clothing recommendations. Do not identify the person. Do not infer race, ethnicity, religion, medical conditions, health status, or other sensitive characteristics. Do not provide exact body measurements. Keep the result respectful and non-judgmental.`,
+            },
+            {
+              inlineData: {
+                mimeType: `image/${match[1] === "jpg" ? "jpeg" : match[1]}`,
+                data: imageDataUrl.slice(match[0].length),
+              },
+            },
+          ],
+        },
+      ],
+      generationConfig: {
+        responseMimeType: "application/json",
+        responseSchema: STYLE_PROFILE_SCHEMA,
+        thinkingConfig: { thinkingLevel: "low" },
+      },
+    };
+    const request = new AbortController();
+    const requestTimeout = setTimeout(() => request.abort(), GEMINI_REQUEST_TIMEOUT_MS);
+    let response: Response;
+    try {
+      response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.7-flash:generateContent?key=${encodeURIComponent(apiKey)}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(requestBody),
+          signal: request.signal,
+        },
+      );
+    } catch (error) {
+      if (error instanceof Error && error.name === "AbortError") throw new Error("GEMINI_TIMEOUT");
+      throw new Error("GEMINI_REQUEST_FAILED");
+    } finally {
+      clearTimeout(requestTimeout);
+      if (process.env["NODE_ENV"] !== "production") {
+        console.info(
+          `[StyleAI] style profile Gemini duration: ${Date.now() - requestStartedAt} ms`,
+        );
+      }
+    }
+    const responseBody = (await response.json().catch(() => null)) as {
+      candidates?: { content?: { parts?: { text?: string }[] } }[];
+      error?: { status?: string; message?: string };
+    } | null;
+    if (!response.ok) {
+      if (process.env["NODE_ENV"] !== "production") {
+        console.info(
+          `[StyleAI] style profile Gemini HTTP ${response.status} ${responseBody?.error?.status ?? "UNKNOWN"}: ${responseBody?.error?.message ?? "request failed"}`,
+        );
+      }
+      const error = new Error(`GEMINI_HTTP_${response.status}`) as Error & { status: number };
+      error.status = response.status;
+      throw error;
+    }
+    const raw = responseBody?.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!raw) throw new Error("GEMINI_MALFORMED_RESPONSE");
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      throw new Error("GEMINI_MALFORMED_RESPONSE");
+    }
+    if (!isStyleProfile(parsed)) throw new Error("GEMINI_MALFORMED_RESPONSE");
+    return parsed;
+  } catch (error) {
+    throw normalizeGeminiError(error);
+  }
+}
+
+async function chat(messages: unknown[], opts: { json?: boolean } = {}): Promise<string> {
   const apiKey = key();
   if (!apiKey) throw new Error("AI_NOT_CONFIGURED");
   const res = await fetch(GATEWAY, {

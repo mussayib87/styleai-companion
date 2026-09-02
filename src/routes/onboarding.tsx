@@ -38,8 +38,8 @@ function Onboarding() {
   }, [profile?.display_name]);
 
   return (
-    <div className="grid min-h-screen place-items-center px-5 py-10">
-      <div className="w-full max-w-sm">
+    <div className="auth-page grid min-h-screen place-items-center px-5 py-10">
+      <div className="auth-panel w-full max-w-sm rounded-3xl p-6 sm:p-8">
         <Logo />
         <h1 className="mt-8 font-display text-2xl font-semibold">Let's set up your style</h1>
         <p className="mt-1 text-sm text-muted-foreground">

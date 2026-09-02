@@ -1,6 +1,7 @@
 import {
   analyzeClothingFn,
   analyzeProductFn,
+  analyzeStyleProfileFn,
   stylistChatFn,
   tryOnFn,
 } from "@/lib/ai.functions";
@@ -13,6 +14,10 @@ import type { WardrobeItem } from "./types";
  * through server functions so keys never reach the browser.
  */
 export const AIService = {
+  async analyzeStyleProfile(imageDataUrl: string) {
+    return analyzeStyleProfileFn({ data: { imageDataUrl } });
+  },
+
   async analyzeClothingImage(imageDataUrl: string) {
     return analyzeClothingFn({ data: { imageDataUrl } });
   },

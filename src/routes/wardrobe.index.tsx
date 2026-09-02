@@ -27,6 +27,7 @@ import {
   useWardrobe,
 } from "@/lib/styleai/data";
 import { CATEGORIES, type WardrobeItem } from "@/lib/styleai/types";
+import { matchesClothingFilter } from "@/lib/styleai/clothing-selection";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/wardrobe/")({
@@ -47,7 +48,7 @@ export const Route = createFileRoute("/wardrobe/")({
   component: WardrobePage,
 });
 
-const FILTERS = ["All", ...CATEGORIES] as const;
+const FILTERS = ["All", ...CATEGORIES, "Party", "Casual", "Formal"] as const;
 
 function WardrobePage() {
   const { data: wardrobe, isLoading } = useWardrobe();
@@ -71,7 +72,7 @@ function WardrobePage() {
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
     return items.filter((i) => {
-      if (filter !== "All" && i.category !== filter) return false;
+      if (!matchesClothingFilter(i, filter)) return false;
       if (laundryOnly && !i.in_laundry) return false;
       if (q && !`${i.name} ${i.color} ${i.style}`.toLowerCase().includes(q)) return false;
       return true;
@@ -139,9 +140,7 @@ function WardrobePage() {
                 key={item.id}
                 item={item}
                 favorite={favIds.has(item.id)}
-                onFavorite={() =>
-                  toggleFav.mutate({ itemId: item.id, on: !favIds.has(item.id) })
-                }
+                onFavorite={() => toggleFav.mutate({ itemId: item.id, on: !favIds.has(item.id) })}
                 onClick={() => setSelected(item)}
               />
             ))}

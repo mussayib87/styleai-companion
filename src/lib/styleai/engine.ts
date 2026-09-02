@@ -1,9 +1,5 @@
-import {
-  type GeneratedOutfit,
-  type ItemRole,
-  type WardrobeItem,
-  roleOf,
-} from "./types";
+import { type GeneratedOutfit, type ItemRole, type WardrobeItem, roleOf } from "./types";
+import { filterForOccasion, itemImageKey } from "./clothing-selection";
 
 /**
  * StyleAI Outfit Optimizer.
@@ -29,6 +25,8 @@ export type StylistContext = {
   fitPreference?: string | undefined;
   /** avoid producing outfits with these signatures (already used this week) */
   excludeSignatures?: string[];
+  /** avoid reusing clothing image URLs in a recommendation set */
+  excludeImageKeys?: string[];
 };
 
 const NEUTRALS = ["white", "black", "grey", "charcoal", "beige", "cream", "navy"];
@@ -100,9 +98,11 @@ function scoreItem(item: WardrobeItem, ctx: StylistContext, targetFormality: num
   let s = 0;
   s -= Math.abs(item.formality - targetFormality) * 7;
   if (ctx.preferredStyles?.some((v) => v.toLowerCase().includes(item.style.toLowerCase()))) s += 8;
-  if (ctx.stylePreference && item.style.toLowerCase() === ctx.stylePreference.toLowerCase()) s += 10;
+  if (ctx.stylePreference && item.style.toLowerCase() === ctx.stylePreference.toLowerCase())
+    s += 10;
   if (ctx.preferredColors?.some((c) => c.toLowerCase() === item.color.toLowerCase())) s += 7;
-  if (ctx.colorPreference && item.color.toLowerCase() === ctx.colorPreference.toLowerCase()) s += 12;
+  if (ctx.colorPreference && item.color.toLowerCase() === ctx.colorPreference.toLowerCase())
+    s += 12;
   const fit = ctx.fitPreference ?? ctx.preferredFit;
   if (fit && item.fit === fit) s += 5;
   if (ctx.likedItemIds?.includes(item.id)) s += 9;
@@ -150,7 +150,7 @@ export function generateOutfits(
   ctx: StylistContext,
   limit = 5,
 ): GeneratedOutfit[] {
-  const items = availableItems(wardrobe);
+  const items = filterForOccasion(availableItems(wardrobe), ctx.occasion);
   const tops = pick(items, "top");
   const bottoms = pick(items, "bottom");
   const shoes = pick(items, "shoes");
@@ -161,6 +161,7 @@ export function generateOutfits(
 
   const target = OCCASION_FORMALITY[ctx.occasion] ?? 2;
   const seen = new Set(ctx.excludeSignatures ?? []);
+  const usedImages = new Set(ctx.excludeImageKeys ?? []);
   const results: GeneratedOutfit[] = [];
 
   for (const top of tops) {
@@ -173,6 +174,10 @@ export function generateOutfits(
 
       const shoe = shoes
         .map((s) => ({ s, v: scoreItem(s, ctx, target) + colorHarmony(s.color, bottom.color) }))
+        .filter(({ s }) => {
+          const imageKey = itemImageKey(s);
+          return imageKey === null || !usedImages.has(imageKey);
+        })
         .sort((a, b) => b.v - a.v)[0];
 
       const pieces: { role: ItemRole; item: WardrobeItem }[] = [
@@ -189,6 +194,10 @@ export function generateOutfits(
       if (wantsJacket && jackets.length) {
         const jacket = jackets
           .map((j) => ({ j, v: scoreItem(j, ctx, target) + colorHarmony(j.color, top.color) }))
+          .filter(({ j }) => {
+            const imageKey = itemImageKey(j);
+            return imageKey === null || !usedImages.has(imageKey);
+          })
           .sort((a, b) => b.v - a.v)[0];
         if (jacket) {
           pieces.push({ role: "outerwear", item: jacket.j });
@@ -198,6 +207,10 @@ export function generateOutfits(
       if (accessories.length) {
         const acc = accessories
           .map((a) => ({ a, v: scoreItem(a, ctx, target) }))
+          .filter(({ a }) => {
+            const imageKey = itemImageKey(a);
+            return imageKey === null || !usedImages.has(imageKey);
+          })
           .sort((x, y) => y.v - x.v)[0];
         if (acc) {
           pieces.push({ role: "accessory", item: acc.a });
@@ -207,7 +220,13 @@ export function generateOutfits(
 
       const sig = signature(pieces.map((p) => p.item));
       if (seen.has(sig)) continue;
+      const imageKeys = pieces
+        .map((piece) => itemImageKey(piece.item))
+        .filter((key): key is string => key !== null);
+      if (new Set(imageKeys).size !== imageKeys.length) continue;
+      if (imageKeys.some((imageKey) => usedImages.has(imageKey))) continue;
       seen.add(sig);
+      imageKeys.forEach((imageKey) => usedImages.add(imageKey));
 
       const reasons: string[] = [];
       reasons.push(`Suitable for ${ctx.occasion.toLowerCase()}`);
@@ -259,6 +278,7 @@ export function planWeek(
   const days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
   const used: string[] = [];
   const usedItems: string[] = [];
+  const usedImageKeys: string[] = [];
   const plan: PlannedDay[] = [];
 
   for (let i = 0; i < 7; i++) {
@@ -271,6 +291,11 @@ export function planWeek(
     if (locked[iso]) {
       plan.push({ date: iso, label, occasion, outfit: locked[iso]! });
       usedItems.unshift(...locked[iso]!.pieces.map((p) => p.item.id));
+      usedImageKeys.unshift(
+        ...locked[iso]!.pieces.map((p) => itemImageKey(p.item)).filter(
+          (key): key is string => key !== null,
+        ),
+      );
       continue;
     }
 
@@ -280,6 +305,7 @@ export function planWeek(
         ...ctx,
         occasion,
         excludeSignatures: used,
+        excludeImageKeys: usedImageKeys,
         recentItemIds: [...usedItems, ...(ctx.recentItemIds ?? [])],
       },
       1,
@@ -287,6 +313,11 @@ export function planWeek(
     if (best) {
       used.push(best.key);
       usedItems.unshift(...best.pieces.map((p) => p.item.id));
+      usedImageKeys.unshift(
+        ...best.pieces
+          .map((p) => itemImageKey(p.item))
+          .filter((key): key is string => key !== null),
+      );
     }
     plan.push({ date: iso, label, occasion, outfit: best ?? null });
   }

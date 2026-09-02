@@ -93,8 +93,8 @@ function AuthPage() {
 
   if (mode === "verify") {
     return (
-      <div className="grid min-h-screen place-items-center px-5 py-10">
-        <div className="w-full max-w-sm">
+      <div className="auth-page grid min-h-screen place-items-center px-5 py-10">
+        <div className="auth-panel w-full max-w-sm rounded-3xl p-6 sm:p-8">
           <Logo />
           <div className="ai-gradient mt-8 grid size-12 place-items-center rounded-2xl text-primary-foreground">
             <MailCheck className="size-6" />
@@ -109,8 +109,8 @@ function AuthPage() {
             <p className="font-medium text-foreground">Why can't I get in yet?</p>
             <p className="mt-1.5">
               Your account exists, but StyleAI can't start a session until the email is confirmed —
-              so your wardrobe, planner and stylist stay locked. Confirming the link signs you in and
-              opens the dashboard.
+              so your wardrobe, planner and stylist stay locked. Confirming the link signs you in
+              and opens the dashboard.
             </p>
           </div>
           <div className="mt-5 space-y-3">
@@ -149,8 +149,8 @@ function AuthPage() {
   }
 
   return (
-    <div className="grid min-h-screen place-items-center px-5 py-10">
-      <div className="w-full max-w-sm">
+    <div className="auth-page grid min-h-screen place-items-center px-5 py-10">
+      <div className="auth-panel w-full max-w-sm rounded-3xl p-6 sm:p-8">
         <Logo />
         <h1 className="mt-8 font-display text-2xl font-semibold">
           {mode === "signin" ? "Welcome back" : "Create your account"}

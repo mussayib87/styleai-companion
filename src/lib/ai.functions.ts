@@ -2,6 +2,23 @@ import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
 
+const MAX_STYLE_PROFILE_IMAGE_LENGTH = 10 * 1024 * 1024;
+const imageDataUrl = z
+  .string()
+  .min(32)
+  .max(MAX_STYLE_PROFILE_IMAGE_LENGTH, "Image is too large")
+  .refine((value) => /^data:image\/(jpeg|jpg|png|webp|gif);base64,[A-Za-z0-9+/=]+$/.test(value), {
+    message: "Expected a base64 image data URL",
+  });
+
+export const analyzeStyleProfileFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) => z.object({ imageDataUrl }).parse(d))
+  .handler(async ({ data }) => {
+    const { analyzeStyleProfile } = await import("./ai.server");
+    return analyzeStyleProfile(data.imageDataUrl);
+  });
+
 export const analyzeClothingFn = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) => z.object({ imageDataUrl: z.string().min(16) }).parse(d))

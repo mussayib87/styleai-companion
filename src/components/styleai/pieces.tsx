@@ -1,10 +1,12 @@
 import type { ReactNode } from "react";
-import { Heart, Lock, RefreshCw, ThumbsDown, Check, Wand2 } from "lucide-react";
+import { Check, Heart, Lock, RefreshCw, Shirt, ThumbsDown, Wand2 } from "lucide-react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
-import { swatchFor, type GeneratedOutfit, type WardrobeItem } from "@/lib/styleai/types";
+import { type GeneratedOutfit, type WardrobeItem } from "@/lib/styleai/types";
+import { getAiPickVisual } from "@/lib/styleai/ai-pick-visuals";
 
 export function ItemSwatch({
   item,
@@ -13,51 +15,45 @@ export function ItemSwatch({
   item: Pick<WardrobeItem, "color" | "pattern" | "image_url" | "name">;
   className?: string;
 }) {
-  const [a, b] = swatchFor(item.color);
-  if (item.image_url) {
+  const [imageFailed, setImageFailed] = useState(false);
+  const [fallbackFailed, setFallbackFailed] = useState(false);
+  if (item.image_url && !imageFailed) {
     return (
       <img
         src={item.image_url}
         alt={item.name}
         loading="lazy"
-        className={cn("size-full object-cover", className)}
+        className={cn(
+          "size-full object-contain p-3 transition-transform duration-300 group-hover:scale-[1.03]",
+          className,
+        )}
+        onError={() => setImageFailed(true)}
+      />
+    );
+  }
+  const fallbackVisual = getAiPickVisual(item);
+  if (fallbackVisual && !fallbackFailed) {
+    return (
+      <img
+        src={fallbackVisual.imageUrl}
+        alt={`${fallbackVisual.category} fashion reference`}
+        loading="lazy"
+        className={cn(
+          "size-full object-contain p-3 transition-transform duration-300 group-hover:scale-[1.03]",
+          className,
+        )}
+        onError={() => setFallbackFailed(true)}
       />
     );
   }
   return (
-    <div
-      className={cn("relative size-full", className)}
-      style={{ backgroundImage: `linear-gradient(150deg, ${a} 0%, ${b} 100%)` }}
-      aria-hidden
-    >
-      {item.pattern === "striped" && (
-        <div
-          className="absolute inset-0 opacity-25"
-          style={{
-            backgroundImage:
-              "repeating-linear-gradient(90deg, rgba(0,0,0,.6) 0 6px, transparent 6px 16px)",
-          }}
-        />
-      )}
-      {item.pattern === "checked" && (
-        <div
-          className="absolute inset-0 opacity-25"
-          style={{
-            backgroundImage:
-              "repeating-linear-gradient(90deg, rgba(0,0,0,.55) 0 4px, transparent 4px 20px), repeating-linear-gradient(0deg, rgba(0,0,0,.55) 0 4px, transparent 4px 20px)",
-          }}
-        />
-      )}
-      {item.pattern === "printed" && (
-        <div
-          className="absolute inset-0 opacity-30"
-          style={{
-            backgroundImage:
-              "radial-gradient(circle at 30% 30%, rgba(255,255,255,.5) 0 12%, transparent 13%), radial-gradient(circle at 70% 65%, rgba(0,0,0,.4) 0 10%, transparent 11%)",
-          }}
-        />
-      )}
-      <div className="absolute inset-0 bg-gradient-to-t from-black/25 to-transparent" />
+    <div className={cn("grid size-full place-items-center bg-card px-3 text-center", className)}>
+      <div>
+        <Shirt className="mx-auto size-8 text-primary/70" strokeWidth={1.25} aria-hidden="true" />
+        <span className="mt-2 block text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+          No image available
+        </span>
+      </div>
     </div>
   );
 }
@@ -74,7 +70,7 @@ export function ItemCard({
   onFavorite?: () => void;
 }) {
   return (
-    <div className="group surface-card relative overflow-hidden rounded-2xl">
+    <div className="group surface-card relative overflow-hidden rounded-2xl transition-transform duration-200 hover:-translate-y-0.5">
       <button
         type="button"
         onClick={onClick}
@@ -83,7 +79,9 @@ export function ItemCard({
         <div className="relative aspect-4/5 overflow-hidden">
           <ItemSwatch item={item} />
           {item.in_laundry && (
-            <Badge className="absolute left-2 top-2 bg-warning/90 text-background">In laundry</Badge>
+            <Badge className="absolute left-2 top-2 bg-warning/90 text-background">
+              In laundry
+            </Badge>
           )}
         </div>
         <div className="p-3">
@@ -100,7 +98,12 @@ export function ItemCard({
           aria-label="Toggle favorite"
           className="absolute right-2 top-2 grid size-8 place-items-center rounded-full bg-background/70 backdrop-blur transition-colors hover:bg-background"
         >
-          <Heart className={cn("size-4", favorite ? "fill-primary text-primary" : "text-muted-foreground")} />
+          <Heart
+            className={cn(
+              "size-4",
+              favorite ? "fill-primary text-primary" : "text-muted-foreground",
+            )}
+          />
         </button>
       )}
     </div>
@@ -159,7 +162,7 @@ export function OutfitCard({
   compact?: boolean;
 }) {
   return (
-    <div className="surface-card rise-in overflow-hidden rounded-3xl p-4">
+    <div className="surface-card rise-in overflow-hidden rounded-2xl p-4">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           {rank !== undefined && (
@@ -248,7 +251,7 @@ export function EmptyState({
   action?: ReactNode;
 }) {
   return (
-    <div className="surface-card grid place-items-center rounded-3xl px-6 py-14 text-center">
+    <div className="surface-card grid place-items-center rounded-2xl px-6 py-14 text-center">
       {icon && (
         <div className="ai-gradient mb-4 grid size-12 place-items-center rounded-2xl text-primary-foreground">
           {icon}
@@ -283,7 +286,7 @@ export function SectionTitle({
 
 export function ThinkingLines({ label }: { label: string }) {
   return (
-    <div className="surface-card shimmer rounded-3xl p-5">
+    <div className="surface-card shimmer rounded-2xl p-5">
       <p className="text-sm font-medium text-primary-glow">{label}</p>
       <div className="mt-4 space-y-2">
         <Skeleton className="h-24 rounded-2xl" />

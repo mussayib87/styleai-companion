@@ -1,7 +1,9 @@
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import {
   Bell,
+  Menu,
+  X,
   CalendarDays,
   ChartNoAxesColumn,
   Home,
@@ -64,16 +66,19 @@ export function AppShell({
   title,
   subtitle,
   action,
+  className,
 }: {
   children: ReactNode;
   title?: string;
   subtitle?: string;
   action?: ReactNode;
+  className?: string;
 }) {
   const { session, loading } = useSession();
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const { data: profile, isLoading: profileLoading } = useProfile();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
     if (!loading && !session) navigate({ to: "/auth", replace: true });
@@ -101,9 +106,9 @@ export function AppShell({
   }
 
   return (
-    <div className="min-h-screen">
+    <div className={cn("min-h-screen", className)}>
       {/* Desktop sidebar */}
-      <aside className="fixed inset-y-0 left-0 z-30 hidden w-[268px] flex-col border-r border-border bg-card/70 px-4 py-6 backdrop-blur-xl lg:flex">
+      <aside className="fixed inset-y-0 left-0 z-30 hidden w-[268px] flex-col border-r border-border bg-[#1b1510]/90 px-4 py-6 backdrop-blur-xl lg:flex">
         <Link to="/" className="px-2">
           <Logo />
         </Link>
@@ -115,9 +120,9 @@ export function AppShell({
                 key={n.to}
                 to={n.to}
                 className={cn(
-                  "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all",
+                  "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all",
                   active
-                    ? "bg-accent text-accent-foreground shadow-[inset_0_0_0_1px_var(--color-border)]"
+                    ? "bg-[#3a2a1c] text-foreground shadow-[inset_0_0_0_1px_rgba(221,191,145,0.22)]"
                     : "text-muted-foreground hover:bg-secondary hover:text-foreground",
                 )}
               >
@@ -142,10 +147,17 @@ export function AppShell({
 
       <div className="lg:pl-[268px]">
         {/* Top bar */}
-        <header className="sticky top-0 z-20 flex items-center justify-between gap-3 border-b border-border bg-background/80 px-4 py-3.5 backdrop-blur-xl sm:px-6">
+        <header className="sticky top-0 z-20 flex items-center justify-between gap-3 border-b border-border bg-background/88 px-4 py-3.5 backdrop-blur-xl sm:px-6">
           <div className="flex min-w-0 items-center gap-3">
             <span className="lg:hidden">
-              <Logo compact />
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label={mobileMenuOpen ? "Close navigation" : "Open navigation"}
+                onClick={() => setMobileMenuOpen((open) => !open)}
+              >
+                {mobileMenuOpen ? <X /> : <Menu />}
+              </Button>
             </span>
             <div className="min-w-0">
               {title && (
@@ -172,6 +184,29 @@ export function AppShell({
             </Link>
           </div>
         </header>
+
+        {mobileMenuOpen && (
+          <div className="fixed inset-0 top-[4.25rem] z-20 bg-background/95 px-4 py-5 backdrop-blur-xl lg:hidden">
+            <nav className="space-y-1">
+              {NAV.map((n) => (
+                <Link
+                  key={n.to}
+                  to={n.to}
+                  onClick={() => setMobileMenuOpen(false)}
+                  className={cn(
+                    "flex items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium",
+                    pathname === n.to
+                      ? "bg-accent text-accent-foreground"
+                      : "text-muted-foreground hover:bg-secondary hover:text-foreground",
+                  )}
+                >
+                  <n.icon className="size-4.5" />
+                  {n.label}
+                </Link>
+              ))}
+            </nav>
+          </div>
+        )}
 
         <main className="px-4 pb-28 pt-5 sm:px-6 lg:pb-12">
           <div className="mx-auto max-w-6xl">{children}</div>

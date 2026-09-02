@@ -91,6 +91,24 @@ export type GeneratedOutfit = {
   pieces: { role: ItemRole; item: WardrobeItem }[];
 };
 
+export type StyleProfile = {
+  summary: string;
+  face: { shape: string };
+  hair: { description: string };
+  silhouette: { description: string };
+  best_colors: string[];
+  recommended_fits: string[];
+  recommended_silhouettes: string[];
+  recommended_styles: string[];
+  recommended_items: {
+    category: string;
+    item: string;
+    color: string;
+    fit: string;
+    reason: string;
+  }[];
+};
+
 export const ROLE_BY_CATEGORY: Record<string, ItemRole> = {
   Shirts: "top",
   "T-Shirts": "top",

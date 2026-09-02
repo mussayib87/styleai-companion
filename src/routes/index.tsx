@@ -1,13 +1,30 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useMemo } from "react";
-import { Shirt, Sparkles, ShoppingBag, Wand2, CalendarClock } from "lucide-react";
+import { useMemo, useState } from "react";
+import {
+  ArrowUpRight,
+  CalendarClock,
+  Heart,
+  Shirt,
+  ShoppingBag,
+  Sparkles,
+  Upload,
+  Wand2,
+} from "lucide-react";
 
 import { AppShell } from "@/components/styleai/app-shell";
-import { EmptyState, OutfitCard, SectionTitle } from "@/components/styleai/pieces";
+import { EmptyState, ItemSwatch, SectionTitle } from "@/components/styleai/pieces";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useProfile, usePrefs, useSeedDemoWardrobe, useWardrobe } from "@/lib/styleai/data";
+import {
+  useFeedback,
+  useProfile,
+  usePrefs,
+  useSeedDemoWardrobe,
+  useWardrobe,
+} from "@/lib/styleai/data";
 import { availableItems, combinationCount, generateOutfits } from "@/lib/styleai/engine";
+import type { GeneratedOutfit } from "@/lib/styleai/types";
+import { getAiPickVisual } from "@/lib/styleai/ai-pick-visuals";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -52,7 +69,6 @@ function Home() {
           ...(prefs?.colors?.length ? { preferredColors: prefs.colors } : {}),
           ...(prefs?.styles?.length ? { preferredStyles: prefs.styles } : {}),
           ...(prefs?.fit ? { preferredFit: prefs.fit } : {}),
-
         },
         3,
       ),
@@ -63,17 +79,42 @@ function Home() {
 
   return (
     <AppShell
-      title={`Hi ${profile?.display_name ?? "there"}`}
-      subtitle="Here's what your wardrobe can do today."
-      action={
-        <Button asChild size="sm">
-          <Link to="/stylist">
-            <Sparkles className="size-4" /> Style me
-          </Link>
-        </Button>
-      }
+      className="fashion-home"
+      title={`Hi ${profile?.display_name?.trim() || "Mussayib"} 👋`}
+      subtitle="Your AI Stylist is ready to elevate your style ✨"
     >
-      <div className="space-y-8">
+      <div className="space-y-10 overflow-x-hidden pb-4">
+        <section className="home-hero overflow-hidden rounded-[2rem] p-6 sm:p-10">
+          <div className="relative z-10 max-w-xl">
+            <p className="home-eyebrow">STYLEAI / PERSONAL EDIT</p>
+            <h2 className="mt-4 max-w-lg font-display text-4xl font-medium leading-[0.98] tracking-tight text-white sm:text-6xl">
+              Smart style,
+              <br />
+              made just for you
+            </h2>
+            <p className="mt-5 max-w-sm text-sm leading-6 text-white/65 sm:text-base">
+              Upload your photo and let AI create looks that truly match you.
+            </p>
+            <Button
+              asChild
+              className="mt-7 h-11 rounded-full bg-[#e8c99b] px-5 text-[#241c16] hover:bg-[#f0d7b2]"
+            >
+              <Link to="/try-on">
+                <Sparkles className="size-4" /> ✨ Try On Me
+              </Link>
+            </Button>
+          </div>
+          <div className="hero-wardrobe" aria-label="Your wardrobe edit">
+            {items.slice(0, 4).map((item, index) => (
+              <div key={item.id} className={`hero-piece hero-piece-${index + 1}`}>
+                <ItemSwatch item={item} />
+              </div>
+            ))}
+            {!items.length && <div className="hero-rack" aria-hidden />}
+            <span className="hero-caption">YOUR EDIT / 01</span>
+          </div>
+        </section>
+
         <section className="grid gap-3 sm:grid-cols-3">
           <Stat label="Items in wardrobe" value={items.length} />
           <Stat label="Ready to wear" value={ready} />
@@ -81,40 +122,20 @@ function Home() {
         </section>
 
         <section>
-          <SectionTitle title="Quick actions" hint="Jump straight into a stylist flow" />
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            {QUICK_ACTIONS.map((a) => (
-              <Link
-                key={a.to}
-                to={a.to}
-                className="surface-card flex flex-col gap-2 rounded-2xl p-4 transition-colors hover:bg-secondary"
-              >
-                <a.icon className="size-5 text-primary-glow" />
-                <span className="text-sm font-medium">{a.label}</span>
-              </Link>
-            ))}
-          </div>
-        </section>
-
-        <section>
           <SectionTitle
-            title="Today's outfit"
-            hint="Ranked from the clothes you already own"
-            action={
-              <Button asChild variant="ghost" size="sm">
-                <Link to="/stylist">More ideas</Link>
-              </Button>
-            }
+            title="AI picks for you ✨"
+            hint="Handpicked outfits AI thinks you'll love"
           />
           {isLoading ? (
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Skeleton className="h-56 rounded-3xl" />
-              <Skeleton className="h-56 rounded-3xl" />
+            <div className="grid gap-4 sm:grid-cols-3">
+              <Skeleton className="h-72 rounded-3xl" />
+              <Skeleton className="h-72 rounded-3xl" />
+              <Skeleton className="h-72 rounded-3xl" />
             </div>
           ) : outfits.length ? (
-            <div className="grid gap-3 sm:grid-cols-2">
-              {outfits.map((o, i) => (
-                <OutfitCard key={o.key} outfit={o} rank={i + 1} />
+            <div className="home-picks -mx-4 flex snap-x gap-4 overflow-x-auto px-4 pb-2 sm:mx-0 sm:grid sm:grid-cols-3 sm:overflow-visible sm:px-0">
+              {outfits.map((outfit) => (
+                <HomeOutfitCard key={outfit.key} outfit={outfit} />
               ))}
             </div>
           ) : (
@@ -139,8 +160,123 @@ function Home() {
             />
           )}
         </section>
+
+        <section className="stylist-banner flex flex-col gap-6 rounded-3xl p-6 sm:flex-row sm:items-center sm:justify-between sm:p-8">
+          <div className="flex items-start gap-4">
+            <div className="grid size-11 shrink-0 place-items-center rounded-full bg-[#c7a36a]/15 text-[#d7b67f]">
+              <Sparkles className="size-5" />
+            </div>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#d7b67f]">
+                AI Stylist
+              </p>
+              <h2 className="mt-2 max-w-lg font-display text-2xl text-white sm:text-3xl">
+                Get personalized outfit ideas based on your style, mood & occasion
+              </h2>
+            </div>
+          </div>
+          <Button
+            asChild
+            variant="outline"
+            className="shrink-0 rounded-full border-white/20 bg-transparent text-white hover:bg-white/10 hover:text-white"
+          >
+            <Link to="/stylist">
+              Get suggestions <ArrowUpRight className="size-4" />
+            </Link>
+          </Button>
+        </section>
+
+        <section>
+          <SectionTitle title="Quick actions ✨" hint="Make your next style move" />
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {QUICK_ACTIONS.map((a) => (
+              <Link key={a.to} to={a.to} className="home-action group rounded-2xl p-4 sm:p-5">
+                <a.icon className="size-5 text-[#a87843]" />
+                <span className="mt-8 block text-sm font-semibold">{a.label}</span>
+                <span className="mt-1 block text-xs text-muted-foreground">
+                  {a.label === "AI Stylist"
+                    ? "Find your style"
+                    : a.label === "Plan week"
+                      ? "Outfits for 7 days"
+                      : a.label === "Try-on"
+                        ? "Virtual try-on"
+                        : "AI opinion"}
+                </span>
+              </Link>
+            ))}
+          </div>
+        </section>
       </div>
     </AppShell>
+  );
+}
+
+function HomeOutfitCard({ outfit }: { outfit: GeneratedOutfit }) {
+  const feedback = useFeedback();
+  return (
+    <article className="home-pick-card group min-w-[78vw] snap-start overflow-hidden rounded-3xl sm:min-w-0">
+      <Link to="/stylist" className="block">
+        <div className="relative aspect-[0.92] overflow-hidden bg-[#e7dacb] p-3">
+          <div className="grid h-full grid-cols-2 gap-2">
+            {outfit.pieces.slice(0, 4).map((piece) => (
+              <div key={piece.item.id} className="overflow-hidden rounded-2xl bg-white/35">
+                <AiPickVisual item={piece.item} />
+              </div>
+            ))}
+          </div>
+          <span className="absolute left-5 top-5 rounded-full bg-[#f8f2ea]/90 px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-[#604936]">
+            {outfit.occasion}
+          </span>
+        </div>
+        <div className="p-4">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <h3 className="truncate font-display text-base font-semibold">{outfit.title}</h3>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {outfit.pieces.length} pieces from your wardrobe
+              </p>
+            </div>
+            <span className="shrink-0 text-sm font-semibold text-[#9b6f3b]">{outfit.score}%</span>
+          </div>
+        </div>
+      </Link>
+      <button
+        type="button"
+        aria-label={`Save ${outfit.title}`}
+        onClick={() => feedback.mutate({ outfit, signal: "save" })}
+        className="absolute right-5 top-5 grid size-9 place-items-center rounded-full bg-[#f8f2ea]/90 text-[#604936] transition hover:bg-white"
+      >
+        <Heart className="size-4" />
+      </button>
+    </article>
+  );
+}
+
+function AiPickVisual({ item }: { item: GeneratedOutfit["pieces"][number]["item"] }) {
+  const [imageFailed, setImageFailed] = useState(false);
+  const visual = getAiPickVisual(item);
+
+  if (visual && !imageFailed) {
+    return (
+      <img
+        src={visual.imageUrl}
+        alt={`${visual.category} fashion recommendation`}
+        loading="lazy"
+        className="size-full object-contain p-2 transition-transform duration-300 group-hover:scale-[1.03]"
+        onError={() => setImageFailed(true)}
+      />
+    );
+  }
+
+  return (
+    <div className="grid size-full place-items-center bg-[#2c2119] px-2 text-center">
+      <div>
+        <Shirt className="mx-auto size-8 text-[#d7b67f]" strokeWidth={1.25} aria-hidden="true" />
+        <span className="mt-2 block text-[9px] font-semibold uppercase tracking-[0.12em] text-white/60">
+          Fashion item
+        </span>
+      </div>
+    </div>
   );
 }
 
