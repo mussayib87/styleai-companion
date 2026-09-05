@@ -61,7 +61,29 @@ export function isAppropriateForOccasion(item: WardrobeItem, occasion: string): 
   if (["school", "college", "casual", "outdoor", "travel", "sports"].includes(normalized)) {
     return item.formality <= 2;
   }
-  if (normalized === "party") return item.formality >= 2;
+  if (normalized === "party") {
+  return (
+    value.includes("party") ||
+    value.includes("trendy") ||
+    value.includes("streetwear")
+  );
+}
+
+if (normalized === "casual") {
+  return (
+    value.includes("casual") ||
+    value.includes("minimal") ||
+    value.includes("streetwear")
+  );
+}
+
+if (normalized === "formal") {
+  return (
+    value.includes("formal") ||
+    value.includes("classic") ||
+    item.formality >= 4
+  );
+}
   return true;
 }
 

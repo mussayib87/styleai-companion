@@ -1,332 +1,1592 @@
-import { type GeneratedOutfit, type ItemRole, type WardrobeItem, roleOf } from "./types";
-import { filterForOccasion, itemImageKey } from "./clothing-selection";
-
-/**
- * StyleAI Outfit Optimizer.
- *
- * Deterministic, explainable ranking engine that runs over the user's real
- * wardrobe. It is the "analyze -> rank -> explain" stage of the stylist agent
- * pipeline and stays independent of any AI provider so it always works.
- */
+import type {
+  GeneratedOutfit,
+  ItemRole,
+  WardrobeItem,
+} from "./types";
+import { filterForOccasion } from "./clothing-selection";
 
 export type StylistContext = {
-  occasion: string;
-  weather?: { condition: "hot" | "mild" | "cold" | "rain"; tempC?: number } | undefined;
+  occasion?: string;
+  weather?: {
+    temperature?: number;
+    condition?: string;
+  };
   preferredStyles?: string[];
   preferredColors?: string[];
   preferredFit?: string;
-  /** item ids worn recently, most recent first */
   recentItemIds?: string[];
-  /** item ids the user has signalled they like */
   likedItemIds?: string[];
   dislikedItemIds?: string[];
-  colorPreference?: string | undefined;
-  stylePreference?: string | undefined;
-  fitPreference?: string | undefined;
-  /** avoid producing outfits with these signatures (already used this week) */
+  colorPreference?: string[];
+  stylePreference?: string[];
+  fitPreference?: string;
   excludeSignatures?: string[];
-  /** avoid reusing clothing image URLs in a recommendation set */
   excludeImageKeys?: string[];
 };
-
-const NEUTRALS = ["white", "black", "grey", "charcoal", "beige", "cream", "navy"];
 
 const OCCASION_FORMALITY: Record<string, number> = {
   Interview: 4,
   Wedding: 4,
   Office: 3,
-  "Smart Casual": 3,
   "Date/event": 3,
   Party: 3,
   College: 2,
   Casual: 2,
   Travel: 2,
   "Daily wear": 2,
-  Relaxed: 1,
 };
 
-function colorHarmony(a: string, b: string): number {
-  const x = a.toLowerCase();
-  const y = b.toLowerCase();
-  if (x === y) return 8;
-  const nx = NEUTRALS.includes(x);
-  const ny = NEUTRALS.includes(y);
-  if (nx && ny) return 16;
-  if (nx || ny) return 14;
-  const clash = [
-    ["green", "maroon"],
-    ["pink", "olive"],
-    ["yellow", "pink"],
-    ["brown", "maroon"],
-  ];
-  if (clash.some(([p, q]) => (x === p && y === q) || (x === q && y === p))) return 2;
-  return 8;
+const OCCASION_ALIASES: Record<string, string> = {
+  marriage: "Wedding",
+  wedding: "Wedding",
+  partywear: "Party",
+  party: "Party",
+  date: "Date/event",
+  dateevent: "Date/event",
+  formal: "Office",
+  smartcasual: "Date/event",
+};
+
+const FORMAL_STYLES = [
+  "formal",
+  "classic",
+  "smart casual",
+  "office",
+  "interview",
+  "wedding",
+];
+
+const CASUAL_STYLES = [
+  "casual",
+  "minimal",
+  "simple",
+  "streetwear",
+  "trendy",
+  "college",
+  "travel",
+];
+
+const PARTY_STYLES = [
+  "party",
+  "partywear",
+  "trendy",
+  "streetwear",
+  "smart casual",
+  "formal",
+  "classic",
+];
+
+const WEDDING_STYLES = [
+  "wedding",
+  "formal",
+  "classic",
+];
+
+const OFFICE_STYLES = [
+  "formal",
+  "smart casual",
+  "classic",
+  "office",
+];
+
+const INTERVIEW_STYLES = [
+  "formal",
+  "classic",
+  "interview",
+];
+
+const DATE_STYLES = [
+  "trendy",
+  "smart casual",
+  "classic",
+  "formal",
+  "date",
+];
+
+function normalize(
+  value: string | null | undefined,
+): string {
+  return String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
 }
 
-function patternHarmony(a: string, b: string): number {
-  if (a === "solid" && b === "solid") return 10;
-  if (a === "solid" || b === "solid") return 12;
-  if (a === b) return 4;
-  return 5;
+function itemText(item: WardrobeItem): string {
+  return [
+    item.name,
+    item.category,
+    item.color,
+    item.style,
+    item.pattern,
+  ]
+    .filter(Boolean)
+    .map(normalize)
+    .join(" ");
 }
 
-function daysSince(date: string | null): number {
-  if (!date) return 60;
-  const diff = Date.now() - new Date(date).getTime();
-  return Math.max(0, Math.round(diff / 86_400_000));
+function styleContains(
+  item: WardrobeItem,
+  styles: string[],
+): boolean {
+  const text = itemText(item);
+
+  return styles.some((style) =>
+    text.includes(normalize(style)),
+  );
 }
 
-function weatherFit(item: WardrobeItem, ctx: StylistContext): number {
-  const w = ctx.weather?.condition;
-  if (!w) return 0;
-  if (w === "hot") {
-    if (item.category === "Jackets") return -18;
-    if (item.sleeve === "short" || item.season === "summer") return 6;
+function canonicalOccasion(
+  value: string | undefined,
+): string {
+  const normalized = normalize(value);
+
+  if (!normalized) {
+    return "Casual";
   }
-  if (w === "cold") {
-    if (item.category === "Jackets") return 12;
-    if (item.sleeve === "short") return -6;
+
+  const direct = Object.keys(
+    OCCASION_FORMALITY,
+  ).find(
+    (occasion) =>
+      normalize(occasion) === normalized,
+  );
+
+  if (direct) {
+    return direct;
   }
-  if (w === "rain") {
-    if (item.category === "Jackets") return 8;
-    if (item.color.toLowerCase() === "white") return -4;
+
+  return (
+    OCCASION_ALIASES[normalized] ??
+    value ??
+    "Casual"
+  );
+}
+
+export function availableItems(
+  items: WardrobeItem[],
+): WardrobeItem[] {
+  return items.filter(
+    (item) => !item.in_laundry,
+  );
+}
+
+function uniqueById(
+  items: WardrobeItem[],
+): WardrobeItem[] {
+  const seen = new Set<string>();
+
+  return items.filter((item) => {
+    if (seen.has(item.id)) {
+      return false;
+    }
+
+    seen.add(item.id);
+    return true;
+  });
+}
+
+function isDress(
+  item: WardrobeItem,
+): boolean {
+  const category = normalize(item.category);
+  const name = normalize(item.name);
+
+  return (
+    category === "dress" ||
+    category === "dresses" ||
+    /\bdress\b/.test(name) ||
+    /\bgown\b/.test(name) ||
+    /\bmaxi\b/.test(name) ||
+    /\bmini dress\b/.test(name) ||
+    /\bmidi dress\b/.test(name)
+  );
+}
+
+function isBottom(
+  item: WardrobeItem,
+): boolean {
+  const category = normalize(item.category);
+
+  return (
+    category === "pants" ||
+    category === "jeans" ||
+    category === "trousers" ||
+    category === "shorts" ||
+    category === "bottom" ||
+    category === "bottoms"
+  );
+}
+
+function roleOf(
+  item: WardrobeItem,
+): ItemRole {
+  const category = normalize(item.category);
+
+  if (isDress(item)) {
+    return "top";
   }
-  return 0;
+
+  if (
+    category === "shirts" ||
+    category === "shirt" ||
+    category === "t-shirts" ||
+    category === "t-shirt" ||
+    category === "tops" ||
+    category === "top"
+  ) {
+    return "top";
+  }
+
+  if (isBottom(item)) {
+    return "bottom";
+  }
+
+  if (
+    category === "shoes" ||
+    category === "shoe" ||
+    category === "sneakers" ||
+    category === "boots"
+  ) {
+    return "shoes";
+  }
+
+  if (
+    category === "jackets" ||
+    category === "jacket" ||
+    category === "outerwear" ||
+    category === "coat"
+  ) {
+    return "outerwear";
+  }
+
+  return "accessory";
 }
 
-function scoreItem(item: WardrobeItem, ctx: StylistContext, targetFormality: number): number {
-  let s = 0;
-  s -= Math.abs(item.formality - targetFormality) * 7;
-  if (ctx.preferredStyles?.some((v) => v.toLowerCase().includes(item.style.toLowerCase()))) s += 8;
-  if (ctx.stylePreference && item.style.toLowerCase() === ctx.stylePreference.toLowerCase())
-    s += 10;
-  if (ctx.preferredColors?.some((c) => c.toLowerCase() === item.color.toLowerCase())) s += 7;
-  if (ctx.colorPreference && item.color.toLowerCase() === ctx.colorPreference.toLowerCase())
-    s += 12;
-  const fit = ctx.fitPreference ?? ctx.preferredFit;
-  if (fit && item.fit === fit) s += 5;
-  if (ctx.likedItemIds?.includes(item.id)) s += 9;
-  if (ctx.dislikedItemIds?.includes(item.id)) s -= 22;
-  s += weatherFit(item, ctx);
-
-  const recentIndex = ctx.recentItemIds?.indexOf(item.id) ?? -1;
-  if (recentIndex === 0) s -= 26;
-  else if (recentIndex > 0 && recentIndex < 4) s -= 14;
-  const rest = daysSince(item.last_worn_at);
-  s += Math.min(10, rest / 3);
-  if (item.times_worn === 0) s += 4;
-  return s;
-}
-
-function pick(items: WardrobeItem[], role: ItemRole): WardrobeItem[] {
-  return items.filter((i) => roleOf(i) === role);
-}
-
-export function availableItems(items: WardrobeItem[]): WardrobeItem[] {
-  return items.filter((i) => !i.in_laundry);
-}
-
-function signature(pieces: WardrobeItem[]): string {
-  return pieces
-    .map((p) => p.id)
+function signature(
+  items: WardrobeItem[],
+): string {
+  return items
+    .map((item) => item.id)
     .sort()
     .join("|");
 }
 
-function titleFor(pieces: { role: ItemRole; item: WardrobeItem }[]): string {
-  const top = pieces.find((p) => p.role === "top")?.item;
-  const bottom = pieces.find((p) => p.role === "bottom")?.item;
-  const shoes = pieces.find((p) => p.role === "shoes")?.item;
-  return [top?.name, bottom?.name, shoes?.name].filter(Boolean).join(" + ");
+function isSuitableForOccasion(
+  item: WardrobeItem,
+  occasionValue: string,
+): boolean {
+  const occasion = normalize(
+    canonicalOccasion(occasionValue),
+  );
+
+  const formality = Number(
+    item.formality ?? 0,
+  );
+
+  const text = itemText(item);
+
+  switch (occasion) {
+    case "party":
+      return (
+        formality >= 3 ||
+        styleContains(item, PARTY_STYLES) ||
+        text.includes("party")
+      );
+
+    case "wedding":
+      return (
+        formality >= 4 ||
+        styleContains(
+          item,
+          WEDDING_STYLES,
+        ) ||
+        text.includes("wedding")
+      );
+
+    case "office":
+      return (
+        formality >= 3 &&
+        (
+          styleContains(
+            item,
+            OFFICE_STYLES,
+          ) ||
+          formality >= 3
+        )
+      );
+
+    case "interview":
+      return (
+        formality >= 4 ||
+        styleContains(
+          item,
+          INTERVIEW_STYLES,
+        )
+      );
+
+    case "college":
+      return (
+        formality <= 2 &&
+        !styleContains(item, [
+          "formal",
+          "wedding",
+          "interview",
+        ])
+      );
+
+    case "casual":
+      return (
+        formality <= 2 &&
+        !styleContains(item, [
+          "formal",
+          "wedding",
+          "interview",
+        ])
+      );
+
+    case "travel":
+      return (
+        formality <= 2 &&
+        (
+          styleContains(
+            item,
+            CASUAL_STYLES,
+          ) ||
+          !styleContains(
+            item,
+            FORMAL_STYLES,
+          )
+        )
+      );
+
+    case "daily wear":
+      return (
+        formality <= 2 &&
+        !styleContains(item, [
+          "formal",
+          "wedding",
+          "interview",
+        ])
+      );
+
+    case "date/event":
+      return (
+        formality >= 2 &&
+        (
+          styleContains(
+            item,
+            DATE_STYLES,
+          ) ||
+          formality >= 3
+        )
+      );
+
+    default:
+      return true;
+  }
 }
 
-/**
- * Rank the strongest complete outfits (top + bottom + shoes + optional
- * outerwear + optional accessory) from the wardrobe. Never returns every
- * mathematical combination — only the strongest ranked looks.
- */
-export function generateOutfits(
-  wardrobe: WardrobeItem[],
-  ctx: StylistContext,
-  limit = 5,
-): GeneratedOutfit[] {
-  const items = filterForOccasion(availableItems(wardrobe), ctx.occasion);
-  const tops = pick(items, "top");
-  const bottoms = pick(items, "bottom");
-  const shoes = pick(items, "shoes");
-  const jackets = pick(items, "outerwear");
-  const accessories = pick(items, "accessory");
+function strictOccasionFilter(
+  items: WardrobeItem[],
+  occasion: string,
+): WardrobeItem[] {
+  return items.filter((item) =>
+    isSuitableForOccasion(
+      item,
+      occasion,
+    ),
+  );
+}
 
-  if (!tops.length || !bottoms.length) return [];
+function colorHarmony(
+  first: WardrobeItem,
+  second: WardrobeItem,
+): number {
+  const a = normalize(first.color);
+  const b = normalize(second.color);
 
-  const target = OCCASION_FORMALITY[ctx.occasion] ?? 2;
-  const seen = new Set(ctx.excludeSignatures ?? []);
-  const usedImages = new Set(ctx.excludeImageKeys ?? []);
-  const results: GeneratedOutfit[] = [];
+  if (!a || !b) {
+    return 0;
+  }
 
-  for (const top of tops) {
-    for (const bottom of bottoms) {
-      let base = 46;
-      base += scoreItem(top, ctx, target) + scoreItem(bottom, ctx, target);
-      base += colorHarmony(top.color, bottom.color);
-      base += patternHarmony(top.pattern, bottom.pattern);
-      base -= Math.abs(top.formality - bottom.formality) * 5;
+  if (a === b) {
+    return 1.5;
+  }
 
-      const shoe = shoes
-        .map((s) => ({ s, v: scoreItem(s, ctx, target) + colorHarmony(s.color, bottom.color) }))
-        .filter(({ s }) => {
-          const imageKey = itemImageKey(s);
-          return imageKey === null || !usedImages.has(imageKey);
-        })
-        .sort((a, b) => b.v - a.v)[0];
+  const neutral = [
+    "black",
+    "white",
+    "grey",
+    "gray",
+    "navy",
+    "beige",
+    "cream",
+    "brown",
+    "charcoal",
+  ];
 
-      const pieces: { role: ItemRole; item: WardrobeItem }[] = [
-        { role: "top", item: top },
-        { role: "bottom", item: bottom },
-      ];
-      if (shoe) {
-        pieces.push({ role: "shoes", item: shoe.s });
-        base += shoe.v * 0.4;
-      }
+  if (
+    neutral.includes(a) ||
+    neutral.includes(b)
+  ) {
+    return 1.2;
+  }
 
-      const wantsJacket =
-        ctx.weather?.condition === "cold" || ctx.weather?.condition === "rain" || target >= 3;
-      if (wantsJacket && jackets.length) {
-        const jacket = jackets
-          .map((j) => ({ j, v: scoreItem(j, ctx, target) + colorHarmony(j.color, top.color) }))
-          .filter(({ j }) => {
-            const imageKey = itemImageKey(j);
-            return imageKey === null || !usedImages.has(imageKey);
-          })
-          .sort((a, b) => b.v - a.v)[0];
-        if (jacket) {
-          pieces.push({ role: "outerwear", item: jacket.j });
-          base += jacket.v * 0.25;
-        }
-      }
-      if (accessories.length) {
-        const acc = accessories
-          .map((a) => ({ a, v: scoreItem(a, ctx, target) }))
-          .filter(({ a }) => {
-            const imageKey = itemImageKey(a);
-            return imageKey === null || !usedImages.has(imageKey);
-          })
-          .sort((x, y) => y.v - x.v)[0];
-        if (acc) {
-          pieces.push({ role: "accessory", item: acc.a });
-          base += 4;
-        }
-      }
+  const pairs = new Set([
+    "blue|white",
+    "white|blue",
+    "blue|beige",
+    "beige|blue",
+    "navy|white",
+    "white|navy",
+    "black|white",
+    "white|black",
+    "black|grey",
+    "grey|black",
+    "green|beige",
+    "beige|green",
+    "brown|cream",
+    "cream|brown",
+    "maroon|beige",
+    "beige|maroon",
+  ]);
 
-      const sig = signature(pieces.map((p) => p.item));
-      if (seen.has(sig)) continue;
-      const imageKeys = pieces
-        .map((piece) => itemImageKey(piece.item))
-        .filter((key): key is string => key !== null);
-      if (new Set(imageKeys).size !== imageKeys.length) continue;
-      if (imageKeys.some((imageKey) => usedImages.has(imageKey))) continue;
-      seen.add(sig);
-      imageKeys.forEach((imageKey) => usedImages.add(imageKey));
+  return pairs.has(`${a}|${b}`)
+    ? 1.8
+    : 0.3;
+}
 
-      const reasons: string[] = [];
-      reasons.push(`Suitable for ${ctx.occasion.toLowerCase()}`);
-      if (colorHarmony(top.color, bottom.color) >= 14)
-        reasons.push(`${top.color} works cleanly with ${bottom.color.toLowerCase()}`);
-      if (ctx.weather) reasons.push(`Appropriate for ${ctx.weather.condition} weather`);
-      if ((ctx.recentItemIds ?? []).every((id) => !pieces.some((p) => p.item.id === id)))
-        reasons.push("You haven't worn this combination recently");
-      reasons.push("Uses clothes already available in your wardrobe");
-      if (ctx.preferredStyles?.length) reasons.push("Works with your selected style");
+function patternHarmony(
+  first: WardrobeItem,
+  second: WardrobeItem,
+): number {
+  const a = normalize(first.pattern);
+  const b = normalize(second.pattern);
 
-      results.push({
-        key: sig,
-        title: titleFor(pieces),
-        occasion: ctx.occasion,
-        score: Math.max(55, Math.min(98, Math.round(base))),
-        reasons: reasons.slice(0, 5),
-        pieces,
-      });
+  if (!a || !b) {
+    return 0;
+  }
+
+  if (
+    a === "solid" &&
+    b === "solid"
+  ) {
+    return 1.2;
+  }
+
+  if (
+    a === "solid" ||
+    b === "solid"
+  ) {
+    return 1;
+  }
+
+  if (a === b) {
+    return 0.3;
+  }
+
+  return -0.2;
+}
+
+function weatherFit(
+  item: WardrobeItem,
+  weather?: StylistContext["weather"],
+): number {
+  if (!weather) {
+    return 0;
+  }
+
+  const category = normalize(
+    item.category,
+  );
+
+  const season = normalize(
+    item.season,
+  );
+
+  const condition = normalize(
+    weather.condition,
+  );
+
+  const temperature =
+    weather.temperature;
+
+  let score = 0;
+
+  if (
+    category === "jackets" ||
+    category === "jacket" ||
+    category === "coat"
+  ) {
+    if (
+      condition.includes("rain") ||
+      condition.includes("cold") ||
+      condition.includes("wind")
+    ) {
+      score += 2;
+    }
+
+    if (
+      temperature !== undefined &&
+      temperature <= 22
+    ) {
+      score += 2;
+    }
+
+    if (
+      temperature !== undefined &&
+      temperature >= 30
+    ) {
+      score -= 2;
     }
   }
 
-  return results.sort((a, b) => b.score - a.score).slice(0, limit);
+  if (
+    season.includes("summer") &&
+    temperature !== undefined &&
+    temperature >= 28
+  ) {
+    score += 1.5;
+  }
+
+  if (
+    season.includes("winter") &&
+    temperature !== undefined &&
+    temperature <= 22
+  ) {
+    score += 1.5;
+  }
+
+  return score;
 }
 
-/** Total number of distinct complete looks the wardrobe can support. */
-export function combinationCount(wardrobe: WardrobeItem[]): number {
-  const items = availableItems(wardrobe);
-  const t = pick(items, "top").length;
-  const b = pick(items, "bottom").length;
-  const s = Math.max(1, pick(items, "shoes").length);
-  return t * b * s;
+function preferenceScore(
+  item: WardrobeItem,
+  context: StylistContext,
+): number {
+  let score = 0;
+
+  const styles = [
+    ...(context.preferredStyles ?? []),
+    ...(context.stylePreference ?? []),
+  ].map(normalize);
+
+  const colors = [
+    ...(context.preferredColors ?? []),
+    ...(context.colorPreference ?? []),
+  ].map(normalize);
+
+  const fit = normalize(
+    context.preferredFit ??
+      context.fitPreference,
+  );
+
+  if (
+    styles.length &&
+    styles.includes(normalize(item.style))
+  ) {
+    score += 2.5;
+  }
+
+  if (
+    colors.length &&
+    colors.includes(normalize(item.color))
+  ) {
+    score += 2;
+  }
+
+  if (
+    fit &&
+    fit === normalize(item.fit)
+  ) {
+    score += 1.5;
+  }
+
+  if (
+    context.likedItemIds?.includes(
+      item.id,
+    )
+  ) {
+    score += 4;
+  }
+
+  if (
+    context.dislikedItemIds?.includes(
+      item.id,
+    )
+  ) {
+    score -= 8;
+  }
+
+  return score;
 }
 
-export type PlannedDay = {
-  date: string;
-  label: string;
-  occasion: string;
-  outfit: GeneratedOutfit | null;
-};
+function wearScore(
+  item: WardrobeItem,
+  context: StylistContext,
+): number {
+  let score = 0;
 
-export function planWeek(
-  wardrobe: WardrobeItem[],
-  weekStart: Date,
-  routine: Record<string, string>,
-  ctx: Omit<StylistContext, "occasion">,
-  locked: Record<string, GeneratedOutfit> = {},
-): PlannedDay[] {
-  const days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-  const used: string[] = [];
-  const usedItems: string[] = [];
-  const usedImageKeys: string[] = [];
-  const plan: PlannedDay[] = [];
+  if (
+    context.recentItemIds?.includes(
+      item.id,
+    )
+  ) {
+    score -= 4;
+  }
 
-  for (let i = 0; i < 7; i++) {
-    const date = new Date(weekStart);
-    date.setDate(weekStart.getDate() + i);
-    const label = days[date.getDay()]!;
-    const occasion = routine[label] ?? "Casual";
-    const iso = date.toISOString().slice(0, 10);
+  const timesWorn = Number(
+    item.times_worn ?? 0,
+  );
 
-    if (locked[iso]) {
-      plan.push({ date: iso, label, occasion, outfit: locked[iso]! });
-      usedItems.unshift(...locked[iso]!.pieces.map((p) => p.item.id));
-      usedImageKeys.unshift(
-        ...locked[iso]!.pieces.map((p) => itemImageKey(p.item)).filter(
-          (key): key is string => key !== null,
-        ),
-      );
+  if (timesWorn === 0) {
+    score += 2;
+  } else if (timesWorn <= 2) {
+    score += 1;
+  } else if (timesWorn >= 8) {
+    score -= 1;
+  }
+
+  if (item.last_worn_at) {
+    const lastWorn =
+      new Date(
+        item.last_worn_at,
+      ).getTime();
+
+    if (!Number.isNaN(lastWorn)) {
+      const days =
+        (Date.now() - lastWorn) /
+        (1000 * 60 * 60 * 24);
+
+      if (days < 2) {
+        score -= 3;
+      } else if (days < 7) {
+        score -= 1;
+      } else if (days > 30) {
+        score += 1;
+      }
+    }
+  }
+
+  return score;
+}
+
+function scoreItem(
+  item: WardrobeItem,
+  context: StylistContext,
+): number {
+  const target =
+    OCCASION_FORMALITY[
+      canonicalOccasion(
+        context.occasion,
+      )
+    ] ?? 2;
+
+  const formality = Number(
+    item.formality ?? 0,
+  );
+
+  let score = 0;
+
+  score += Math.max(
+    0,
+    3 -
+      Math.abs(
+        formality - target,
+      ),
+  );
+
+  score += preferenceScore(
+    item,
+    context,
+  );
+
+  score += wearScore(
+    item,
+    context,
+  );
+
+  score += weatherFit(
+    item,
+    context.weather,
+  );
+
+  return score;
+}
+
+function combinationScore(
+  items: WardrobeItem[],
+  context: StylistContext,
+): number {
+  let score = 0;
+
+  for (const item of items) {
+    score += scoreItem(
+      item,
+      context,
+    );
+  }
+
+  // FIX #1 and #2:
+  // Never pass possibly-undefined array indexes
+  // into colorHarmony/patternHarmony.
+  for (
+    let i = 0;
+    i < items.length;
+    i += 1
+  ) {
+    const first = items[i];
+
+    if (!first) {
       continue;
     }
 
-    const [best] = generateOutfits(
-      wardrobe,
-      {
-        ...ctx,
-        occasion,
-        excludeSignatures: used,
-        excludeImageKeys: usedImageKeys,
-        recentItemIds: [...usedItems, ...(ctx.recentItemIds ?? [])],
-      },
-      1,
-    );
-    if (best) {
-      used.push(best.key);
-      usedItems.unshift(...best.pieces.map((p) => p.item.id));
-      usedImageKeys.unshift(
-        ...best.pieces
-          .map((p) => itemImageKey(p.item))
-          .filter((key): key is string => key !== null),
+    for (
+      let j = i + 1;
+      j < items.length;
+      j += 1
+    ) {
+      const second = items[j];
+
+      if (!second) {
+        continue;
+      }
+
+      score += colorHarmony(
+        first,
+        second,
+      );
+
+      score += patternHarmony(
+        first,
+        second,
       );
     }
-    plan.push({ date: iso, label, occasion, outfit: best ?? null });
   }
-  return plan;
+
+  const dress = items.find(isDress);
+
+  if (dress) {
+    score += 2;
+  }
+
+  return score;
 }
 
-export function startOfWeek(d = new Date()): Date {
-  const date = new Date(d);
-  date.setHours(0, 0, 0, 0);
-  date.setDate(date.getDate() - date.getDay());
-  return date;
+type Candidate = {
+  items: WardrobeItem[];
+  roles: ItemRole[];
+  score: number;
+};
+
+function buildCandidates(
+  items: WardrobeItem[],
+  context: StylistContext,
+): Candidate[] {
+  const tops = items.filter(
+    (item) =>
+      roleOf(item) === "top" &&
+      !isDress(item),
+  );
+
+  const bottoms = items.filter(
+    isBottom,
+  );
+
+  const shoes = items.filter(
+    (item) =>
+      roleOf(item) === "shoes",
+  );
+
+  const jackets = items.filter(
+    (item) =>
+      roleOf(item) === "outerwear",
+  );
+
+  const accessories = items.filter(
+    (item) =>
+      roleOf(item) === "accessory",
+  );
+
+  const dresses = items.filter(
+    isDress,
+  );
+
+  const candidates: Candidate[] = [];
+
+  // DRESSES
+
+  for (const dress of dresses) {
+    for (const shoe of shoes) {
+      const base = [
+        dress,
+        shoe,
+      ];
+
+      candidates.push({
+        items: base,
+        roles: [
+          "top",
+          "shoes",
+        ],
+        score: combinationScore(
+          base,
+          context,
+        ),
+      });
+
+      for (const jacket of jackets) {
+        const withJacket = [
+          dress,
+          shoe,
+          jacket,
+        ];
+
+        candidates.push({
+          items: withJacket,
+          roles: [
+            "top",
+            "shoes",
+            "outerwear",
+          ],
+          score: combinationScore(
+            withJacket,
+            context,
+          ),
+        });
+
+        for (
+          const accessory of accessories
+        ) {
+          const full = [
+            dress,
+            shoe,
+            jacket,
+            accessory,
+          ];
+
+          candidates.push({
+            items: full,
+            roles: [
+              "top",
+              "shoes",
+              "outerwear",
+              "accessory",
+            ],
+            score:
+              combinationScore(
+                full,
+                context,
+              ),
+          });
+        }
+      }
+
+      for (
+        const accessory of accessories
+      ) {
+        const withAccessory = [
+          dress,
+          shoe,
+          accessory,
+        ];
+
+        candidates.push({
+          items: withAccessory,
+          roles: [
+            "top",
+            "shoes",
+            "accessory",
+          ],
+          score:
+            combinationScore(
+              withAccessory,
+              context,
+            ),
+        });
+      }
+    }
+  }
+
+  // TOP + BOTTOM
+
+  for (const top of tops) {
+    for (
+      const bottom of bottoms
+    ) {
+      const base = [
+        top,
+        bottom,
+      ];
+
+      candidates.push({
+        items: base,
+        roles: [
+          "top",
+          "bottom",
+        ],
+        score: combinationScore(
+          base,
+          context,
+        ),
+      });
+
+      for (const shoe of shoes) {
+        const withShoes = [
+          top,
+          bottom,
+          shoe,
+        ];
+
+        candidates.push({
+          items: withShoes,
+          roles: [
+            "top",
+            "bottom",
+            "shoes",
+          ],
+          score:
+            combinationScore(
+              withShoes,
+              context,
+            ),
+        });
+
+        for (
+          const jacket of jackets
+        ) {
+          const withJacket = [
+            top,
+            bottom,
+            shoe,
+            jacket,
+          ];
+
+          candidates.push({
+            items: withJacket,
+            roles: [
+              "top",
+              "bottom",
+              "shoes",
+              "outerwear",
+            ],
+            score:
+              combinationScore(
+                withJacket,
+                context,
+              ),
+          });
+
+          for (
+            const accessory of accessories
+          ) {
+            const full = [
+              top,
+              bottom,
+              shoe,
+              jacket,
+              accessory,
+            ];
+
+            candidates.push({
+              items: full,
+              roles: [
+                "top",
+                "bottom",
+                "shoes",
+                "outerwear",
+                "accessory",
+              ],
+              score:
+                combinationScore(
+                  full,
+                  context,
+                ),
+            });
+          }
+        }
+
+        for (
+          const accessory of accessories
+        ) {
+          const withAccessory = [
+            top,
+            bottom,
+            shoe,
+            accessory,
+          ];
+
+          candidates.push({
+            items: withAccessory,
+            roles: [
+              "top",
+              "bottom",
+              "shoes",
+              "accessory",
+            ],
+            score:
+              combinationScore(
+                withAccessory,
+                context,
+              ),
+          });
+        }
+      }
+    }
+  }
+
+  return candidates;
+}
+
+function candidateContainsDuplicateIds(
+  candidate: Candidate,
+): boolean {
+  const ids = candidate.items.map(
+    (item) => item.id,
+  );
+
+  return (
+    new Set(ids).size !== ids.length
+  );
+}
+
+function dedupeCandidates(
+  candidates: Candidate[],
+): Candidate[] {
+  const seenSignatures =
+    new Set<string>();
+
+  return candidates.filter(
+    (candidate) => {
+      if (
+        candidateContainsDuplicateIds(
+          candidate,
+        )
+      ) {
+        return false;
+      }
+
+      const hasDress =
+        candidate.items.some(
+          isDress,
+        );
+
+      const hasBottom =
+        candidate.items.some(
+          isBottom,
+        );
+
+      // A dress can NEVER be combined
+      // with pants/bottoms.
+      if (
+        hasDress &&
+        hasBottom
+      ) {
+        return false;
+      }
+
+      const sig = signature(
+        candidate.items,
+      );
+
+      if (
+        seenSignatures.has(sig)
+      ) {
+        return false;
+      }
+
+      seenSignatures.add(sig);
+
+      return true;
+    },
+  );
+}
+
+function reasonsFor(
+  items: WardrobeItem[],
+  context: StylistContext,
+): string[] {
+  const reasons: string[] = [];
+
+  const occasion =
+    canonicalOccasion(
+      context.occasion,
+    );
+
+  reasons.push(
+    `Selected specifically for ${occasion}`,
+  );
+
+  const dress =
+    items.find(isDress);
+
+  if (dress) {
+    reasons.push(
+      `${dress.name} is a complete one-piece look`,
+    );
+  } else {
+    const top =
+      items.find(
+        (item) =>
+          roleOf(item) === "top",
+      );
+
+    const bottom =
+      items.find(isBottom);
+
+    if (top && bottom) {
+      reasons.push(
+        `${top.name} pairs naturally with ${bottom.name}`,
+      );
+    }
+  }
+
+  const colors = items
+    .map(
+      (item) => item.color,
+    )
+    .filter(Boolean);
+
+  if (colors.length >= 2) {
+    reasons.push(
+      `The ${colors.join(" and ")} colors work well together`,
+    );
+  }
+
+  const patterns = items
+    .map((item) =>
+      normalize(item.pattern),
+    )
+    .filter(Boolean);
+
+  if (
+    patterns.length > 1 &&
+    patterns.every(
+      (pattern) =>
+        pattern === "solid",
+    )
+  ) {
+    reasons.push(
+      "The solid patterns keep the outfit balanced",
+    );
+  }
+
+  if (
+    context.preferredStyles?.some(
+      (style) =>
+        normalize(style) ===
+        normalize(
+          items[0]?.style,
+        ),
+    )
+  ) {
+    reasons.push(
+      "Matches your preferred style",
+    );
+  }
+
+  if (
+    context.preferredFit &&
+    items.some(
+      (item) =>
+        normalize(item.fit) ===
+        normalize(
+          context.preferredFit,
+        ),
+    )
+  ) {
+    reasons.push(
+      "Matches your preferred fit",
+    );
+  }
+
+  if (
+    context.recentItemIds?.length &&
+    items.some(
+      (item) =>
+        !context.recentItemIds?.includes(
+          item.id,
+        ),
+    )
+  ) {
+    reasons.push(
+      "Avoids recently worn pieces",
+    );
+  }
+
+  if (
+    context.weather &&
+    items.some(
+      (item) =>
+        weatherFit(
+          item,
+          context.weather,
+        ) > 0,
+    )
+  ) {
+    reasons.push(
+      "Works well with today's weather",
+    );
+  }
+
+  return reasons.slice(0, 5);
+}
+
+function candidateToOutfit(
+  candidate: Candidate,
+  index: number,
+  context: StylistContext,
+): GeneratedOutfit {
+  const occasion =
+    canonicalOccasion(
+      context.occasion,
+    );
+
+  // FIX #3:
+  // Build pieces from the candidate arrays
+  // using an explicit guaranteed role fallback.
+  const pieces: {
+    role: ItemRole;
+    item: WardrobeItem;
+  }[] = [];
+
+  for (
+    let i = 0;
+    i < candidate.items.length;
+    i += 1
+  ) {
+    const item =
+      candidate.items[i];
+
+    if (!item) {
+      continue;
+    }
+
+    const role =
+      candidate.roles[i];
+
+    if (!role) {
+      continue;
+    }
+
+    pieces.push({
+      role,
+      item,
+    });
+  }
+
+  return {
+    key: `${occasion}-${signature(
+      candidate.items,
+    )}`,
+    title: `${occasion} look ${
+      index + 1
+    }`,
+    occasion,
+    score:
+      Math.round(
+        candidate.score * 10,
+      ) / 10,
+    reasons: reasonsFor(
+      candidate.items,
+      context,
+    ),
+    pieces,
+  };
+}
+
+export function generateOutfits(
+  items: WardrobeItem[],
+  context: StylistContext = {},
+  limit = 3,
+): GeneratedOutfit[] {
+  const occasion =
+    canonicalOccasion(
+      context.occasion,
+    );
+
+  // 1. Remove laundry.
+  let wardrobe =
+    availableItems(items);
+
+  // 2. Every DB ID is unique.
+  wardrobe =
+    uniqueById(wardrobe);
+
+  // 3. Strict occasion filtering.
+  wardrobe =
+    strictOccasionFilter(
+      wardrobe,
+      occasion,
+    );
+
+  // 4. Secondary clothing filter.
+  const secondaryFiltered =
+    filterForOccasion(
+      wardrobe,
+      occasion,
+    );
+
+  if (
+    secondaryFiltered.length > 0
+  ) {
+    wardrobe =
+      secondaryFiltered;
+  }
+
+  if (!wardrobe.length) {
+    return [];
+  }
+
+  // 5. Generate combinations.
+  let candidates =
+    buildCandidates(
+      wardrobe,
+      {
+        ...context,
+        occasion,
+      },
+    );
+
+  // 6. Remove invalid combinations.
+  candidates =
+    dedupeCandidates(
+      candidates,
+    );
+
+  // 7. Remove explicitly excluded
+  // signatures.
+  const excludedSignatures =
+    new Set(
+      context.excludeSignatures ??
+        [],
+    );
+
+  candidates =
+    candidates.filter(
+      (candidate) =>
+        !excludedSignatures.has(
+          signature(
+            candidate.items,
+          ),
+        ),
+    );
+
+  // 8. Best score first.
+  candidates.sort(
+    (a, b) => {
+      if (
+        b.score !== a.score
+      ) {
+        return (
+          b.score - a.score
+        );
+      }
+
+      return signature(
+        a.items,
+      ).localeCompare(
+        signature(
+          b.items,
+        ),
+      );
+    },
+  );
+
+  // 9. CRITICAL:
+  // An exact DB wardrobe item ID can
+  // appear only once in the result set.
+  const usedItemIds =
+    new Set<string>();
+
+  const results: GeneratedOutfit[] =
+    [];
+
+  for (
+    const candidate of candidates
+  ) {
+    if (
+      results.length >= limit
+    ) {
+      break;
+    }
+
+    const candidateIds =
+      candidate.items.map(
+        (item) => item.id,
+      );
+
+    const alreadyUsed =
+      candidateIds.some(
+        (id) =>
+          usedItemIds.has(id),
+      );
+
+    if (alreadyUsed) {
+      continue;
+    }
+
+    if (
+      new Set(
+        candidateIds,
+      ).size !==
+      candidateIds.length
+    ) {
+      continue;
+    }
+
+    const hasDress =
+      candidate.items.some(
+        isDress,
+      );
+
+    const hasBottom =
+      candidate.items.some(
+        isBottom,
+      );
+
+    if (
+      hasDress &&
+      hasBottom
+    ) {
+      continue;
+    }
+
+    candidateIds.forEach(
+      (id) =>
+        usedItemIds.add(id),
+    );
+
+    results.push(
+      candidateToOutfit(
+        candidate,
+        results.length,
+        {
+          ...context,
+          occasion,
+        },
+      ),
+    );
+  }
+
+  return results;
+}
+
+export function combinationCount(
+  items: WardrobeItem[],
+): number {
+  const wardrobe =
+    uniqueById(
+      availableItems(items),
+    );
+
+  const tops =
+    wardrobe.filter(
+      (item) =>
+        roleOf(item) === "top" &&
+        !isDress(item),
+    );
+
+  const bottoms =
+    wardrobe.filter(isBottom);
+
+  const shoes =
+    wardrobe.filter(
+      (item) =>
+        roleOf(item) === "shoes",
+    );
+
+  const dresses =
+    wardrobe.filter(isDress);
+
+  const normalCount =
+    tops.length *
+    bottoms.length *
+    Math.max(
+      shoes.length,
+      1,
+    );
+
+  const dressCount =
+    dresses.length *
+    Math.max(
+      shoes.length,
+      1,
+    );
+
+  return (
+    normalCount +
+    dressCount
+  );
+}
+
+export function planWeek(
+  items: WardrobeItem[],
+  contexts: StylistContext[],
+): GeneratedOutfit[][] {
+  const usedItemIds =
+    new Set<string>();
+
+  return contexts.map(
+    (context) => {
+      const outfits =
+        generateOutfits(
+          items,
+          {
+            ...context,
+            recentItemIds: [
+              ...(context.recentItemIds ??
+                []),
+              ...Array.from(
+                usedItemIds,
+              ),
+            ],
+          },
+          1,
+        );
+
+      for (
+        const outfit of outfits
+      ) {
+        for (
+          const piece of outfit.pieces
+        ) {
+          usedItemIds.add(
+            piece.item.id,
+          );
+        }
+      }
+
+      return outfits;
+    },
+  );
+}
+
+export function startOfWeek(
+  date = new Date(),
+): Date {
+  const result =
+    new Date(date);
+
+  const day =
+    result.getDay();
+
+  const diff =
+    day === 0
+      ? -6
+      : 1 - day;
+
+  result.setDate(
+    result.getDate() + diff,
+  );
+
+  result.setHours(
+    0,
+    0,
+    0,
+    0,
+  );
+
+  return result;
 }

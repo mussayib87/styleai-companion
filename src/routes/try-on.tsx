@@ -1,382 +1,368 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
-import { Camera, ChevronRight, Shirt, Sparkles, Wand2 } from "lucide-react";
+import { createFileRoute } from "@tanstack/react-router";
+import { useState } from "react";
+import { Camera, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 
 import { AppShell } from "@/components/styleai/app-shell";
-import { EmptyState, OutfitStrip, ScorePill, SectionTitle } from "@/components/styleai/pieces";
+import { SectionTitle } from "@/components/styleai/pieces";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { fileToDataUrl } from "@/lib/styleai/data";
-import { useStylistContext } from "@/lib/styleai/use-stylist";
-import { AIService } from "@/lib/styleai/ai-service";
-import { generateOutfits } from "@/lib/styleai/engine";
-import { cn } from "@/lib/utils";
-import type { StyleProfile } from "@/lib/styleai/types";
 
 export const Route = createFileRoute("/try-on")({
-  head: () => ({
-    meta: [
-      { title: "AI Try-On — StyleAI" },
-      {
-        name: "description",
-        content: "Preview how an outfit from your wardrobe looks on you with AI try-on.",
-      },
-      { property: "og:title", content: "AI Try-On — StyleAI" },
-      {
-        property: "og:description",
-        content: "Upload one photo and preview outfits from your own wardrobe.",
-      },
-    ],
-  }),
   component: TryOnPage,
 });
 
+const MAKE_WEBHOOK_URL =
+  "https://hook.eu1.make.com/j7snjaigkbwlbtz3ckdtax5s8x7pixhv";
+
+type Outfit = {
+  outfit_number: number;
+  outfit_name: string;
+  clothing: string;
+  footwear: string;
+  accessories: string;
+  hairstyle: string;
+  description_for_user: string;
+  why_it_suits_her: string;
+  image_prompt: string;
+};
+
+type MakeResponse = {
+  outfits?: Outfit[];
+  message?: string;
+};
+
 function TryOnPage() {
-  const { items, base, todayOccasion } = useStylistContext();
   const [photo, setPhoto] = useState<string | null>(null);
-  const [analysisPhoto, setAnalysisPhoto] = useState<string | null>(null);
-  const [selected, setSelected] = useState<string | null>(null);
-  const [result, setResult] = useState<{ imageDataUrl: string | null; note: string } | null>(null);
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [outfits, setOutfits] = useState<Outfit[]>([]);
   const [busy, setBusy] = useState(false);
-  const [styleProfile, setStyleProfile] = useState<StyleProfile | null>(null);
-  const [profileError, setProfileError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  const outfits = useMemo(
-    () => generateOutfits(items, { ...base, occasion: todayOccasion }, 6),
-    [items, base, todayOccasion],
-  );
-  const chosen = outfits.find((o) => o.key === selected) ?? outfits[0] ?? null;
+  const handlePhotoChange = async (
+    event: React.ChangeEvent<HTMLInputElement>,
+  ) => {
+    const file = event.target.files?.[0];
 
-  async function optimizeImage(file: File): Promise<string> {
-    const sourceUrl = URL.createObjectURL(file);
-    try {
-      const image = new Image();
-      image.src = sourceUrl;
-      await new Promise<void>((resolve, reject) => {
-        image.onload = () => resolve();
-        image.onerror = () => reject(new Error("image decode failed"));
-      });
-      const scale = Math.min(1, 1600 / Math.max(image.naturalWidth, image.naturalHeight));
-      const canvas = document.createElement("canvas");
-      canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
-      canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
-      const context = canvas.getContext("2d");
-      if (!context) throw new Error("canvas unavailable");
-      context.drawImage(image, 0, 0, canvas.width, canvas.height);
-      return canvas.toDataURL("image/jpeg", 0.8);
-    } finally {
-      URL.revokeObjectURL(sourceUrl);
+    if (!file) {
+      return;
     }
-  }
 
-  async function selectPhoto(file: File) {
+    setError(null);
+    setOutfits([]);
+
     if (!file.type.startsWith("image/")) {
-      setProfileError("Please choose a JPG, PNG, WebP, or GIF image.");
+      setError("Please select an image file.");
       return;
     }
-    if (file.size > 7 * 1024 * 1024) {
-      setProfileError("That image is too large. Please choose one under 7 MB.");
+
+    if (file.size > 5 * 1024 * 1024) {
+      setError("That image is too large. Please choose an image under 5 MB.");
       return;
     }
-    setProfileError(null);
-    setStyleProfile(null);
+
     try {
-      const [previewUrl, optimizedUrl] = await Promise.all([
-        fileToDataUrl(file),
-        optimizeImage(file),
-      ]);
-      setPhoto(previewUrl);
-      setAnalysisPhoto(optimizedUrl);
+      const dataUrl = await fileToDataUrl(file);
+
+      setPhoto(dataUrl);
+      setPhotoFile(file);
     } catch {
-      setProfileError("That image could not be prepared. Please choose another photo.");
+      setError("Could not read that image. Please try another photo.");
     }
-  }
+  };
 
-  async function analyzeProfile() {
-    if (!analysisPhoto) return;
-    setBusy(true);
-    setProfileError(null);
-    try {
-      const profile = await AIService.analyzeStyleProfile(analysisPhoto);
-      setStyleProfile(profile);
-      setPhoto(null);
-      setAnalysisPhoto(null);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "";
-      setProfileError(
-        message.includes("GEMINI_OVERLOADED")
-          ? "Gemini is temporarily busy. Please try again in a moment."
-          : message.includes("GEMINI_RATE_LIMITED")
-            ? "Gemini is temporarily busy due to request limits. Please try again shortly."
-            : message.includes("GEMINI_AUTH_ERROR")
-              ? "The Gemini API configuration needs attention."
-              : message.includes("GEMINI_BAD_REQUEST")
-                ? "The photo could not be processed. Please try another clear photo."
-                : message.includes("GEMINI_TIMEOUT")
-                  ? "Style analysis is taking longer than expected. Please try again."
-                  : message.includes("GEMINI_NOT_CONFIGURED")
-                    ? "Style analysis is not configured yet. Please add GEMINI_API_KEY on the server."
-                    : message.includes("INVALID_IMAGE")
-                      ? "That image could not be read. Please choose another photo."
-                      : message.includes("too large")
-                        ? "That image is too large. Please choose a smaller photo."
-                        : "We couldn't analyze that photo right now. Please try again.",
-      );
-    } finally {
-      setBusy(false);
+  const sendToMake = async () => {
+    if (!photoFile) {
+      setError("Please upload your photo first.");
+      return;
     }
-  }
 
-  async function run() {
-    if (!photo || !chosen) return;
     setBusy(true);
-    setResult(null);
+    setError(null);
+    setOutfits([]);
+
     try {
-      const res = await AIService.generateTryOn({
-        personImageDataUrl: photo,
-        outfitDescription: chosen.pieces
-          .map((p) => `${p.item.color} ${p.item.name} (${p.item.category}, ${p.item.fit} fit)`)
-          .join(", "),
+      const formData = new FormData();
+
+      formData.append("file", photoFile, photoFile.name);
+
+      const response = await fetch(MAKE_WEBHOOK_URL, {
+        method: "POST",
+        body: formData,
       });
-      setResult(res);
-      if (!res.imageDataUrl) toast.message("Try-on preview isn't available in demo mode.");
-    } catch {
-      toast.error("Try-on failed. Please try again in a moment.");
+
+      console.log("Make HTTP status:", response.status);
+      console.log("Make HTTP OK:", response.ok);
+      console.log(
+        "Make Content-Type:",
+        response.headers.get("content-type"),
+      );
+
+      const rawText = await response.text();
+
+      console.log("RAW MAKE RESPONSE:", rawText);
+
+      if (!response.ok) {
+        throw new Error(
+          `Make returned HTTP ${response.status}: ${rawText.substring(0, 500)}`,
+        );
+      }
+
+      let data: MakeResponse;
+
+      try {
+        data = JSON.parse(rawText) as MakeResponse;
+      } catch {
+        throw new Error(
+          `Make returned invalid JSON: ${rawText.substring(0, 500)}`,
+        );
+      }
+
+      if (!Array.isArray(data.outfits)) {
+        throw new Error(
+          "Make response does not contain an outfits array.",
+        );
+      }
+
+      setOutfits(data.outfits);
+
+      toast.success(
+        `${data.outfits.length} outfit recommendations received.`,
+      );
+    } catch (err) {
+      console.error("Make webhook error:", err);
+
+      const message =
+        err instanceof Error
+          ? err.message
+          : "Something went wrong while contacting Make.";
+
+      setError(message);
+      toast.error(message);
     } finally {
       setBusy(false);
     }
-  }
+  };
 
   return (
-    <AppShell
-      title="AI Try-On"
-      subtitle="Discover your style and preview outfits from your wardrobe."
-    >
-      <section className="surface-card rounded-3xl p-5 sm:p-7">
-        {styleProfile ? (
-          <StyleProfileResult
-            profile={styleProfile}
-            onChooseAnother={() => setStyleProfile(null)}
-          />
-        ) : (
-          <div className="max-w-2xl">
-            <SectionTitle
-              title="Let's discover your style"
-              hint="A clear full-body photo is helpful, but not required."
-            />
-            <p className="mt-3 max-w-xl text-sm leading-6 text-muted-foreground">
-              Upload a clear photo of yourself and StyleAI will create your personalized style
-              profile.
-            </p>
-            <label className="surface-card relative mt-5 grid aspect-[4/3] w-full max-w-md cursor-pointer place-items-center overflow-hidden rounded-2xl border border-dashed text-center">
+    <AppShell>
+      <div className="mx-auto max-w-6xl px-4 py-8">
+       <SectionTitle
+  title="Find your personalized outfits"
+  hint="Upload your photo and our AI will analyze your style profile and create five personalized outfit ideas."
+/>
+
+        <div className="mt-8 grid gap-8 lg:grid-cols-[360px_1fr]">
+          <div className="space-y-5">
+            <div className="rounded-2xl border bg-card p-5 shadow-sm">
+              <div className="mb-4 flex items-center gap-2">
+                <Camera className="h-5 w-5" />
+                <h2 className="font-semibold">Your photo</h2>
+              </div>
+
               {photo ? (
-                <img
-                  src={photo}
-                  alt="Selected style profile photo"
-                  className="size-full object-cover"
-                />
+                <div className="overflow-hidden rounded-xl border">
+                  <img
+                    src={photo}
+                    alt="Uploaded user"
+                    className="aspect-[3/4] w-full object-cover"
+                  />
+                </div>
               ) : (
-                <div className="px-6">
-                  <div className="ai-gradient mx-auto grid size-12 place-items-center rounded-2xl text-primary-foreground">
-                    <Camera className="size-5" />
-                  </div>
-                  <p className="mt-4 font-display text-base font-semibold">Upload Photo</p>
+                <label className="flex aspect-[3/4] cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed p-6 text-center transition hover:bg-muted/50">
+                  <Camera className="mb-3 h-10 w-10 opacity-60" />
+
+                  <span className="font-medium">
+                    Upload your photo
+                  </span>
+
+                  <span className="mt-1 text-sm text-muted-foreground">
+                    JPG, PNG or WEBP
+                  </span>
+
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handlePhotoChange}
+                  />
+                </label>
+              )}
+
+              {photo && (
+                <label className="mt-4 block cursor-pointer">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full"
+                    asChild
+                  >
+                    <span>Change Photo</span>
+                  </Button>
+
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handlePhotoChange}
+                  />
+                </label>
+              )}
+
+              <Button
+                type="button"
+                className="mt-4 w-full"
+                disabled={!photoFile || busy}
+                onClick={sendToMake}
+              >
+                <Sparkles className="mr-2 h-4 w-4" />
+
+                {busy
+                  ? "AI is creating your outfits..."
+                  : "Generate 5 Outfits"}
+              </Button>
+
+              {error && (
+                <div className="mt-4 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+                  {error}
                 </div>
               )}
-              <input
-                type="file"
-                accept="image/jpeg,image/png,image/webp,image/gif"
-                className="sr-only"
-                onChange={(event) => {
-                  const file = event.target.files?.[0];
-                  if (file) void selectPhoto(file);
-                  event.currentTarget.value = "";
-                }}
-              />
-            </label>
-            {profileError && (
-              <p className="mt-3 text-sm text-destructive" role="alert">
-                {profileError}
-              </p>
-            )}
-            <Button
-              className="mt-5"
-              disabled={!photo || busy}
-              onClick={() => void analyzeProfile()}
-            >
-              <Sparkles className="size-4" /> {busy ? "Analyzing your style…" : "Proceed"}
-            </Button>
+            </div>
           </div>
-        )}
-      </section>
 
-      {!items.length ? (
-        <EmptyState
-          icon={<Shirt className="size-5" />}
-          title="Add clothes to try outfits"
-          body="Your style profile is ready. Add a few wardrobe pieces when you want to preview complete looks."
-          action={
-            <Button asChild>
-              <Link to="/wardrobe/add">Add clothes</Link>
-            </Button>
-          }
-        />
-      ) : (
-        <div className="grid gap-6 lg:grid-cols-2">
-          <section className="space-y-4">
-            <SectionTitle title="Your photo" hint="Full-body works best. Stored privately." />
-            <label className="surface-card relative grid aspect-3/4 w-full cursor-pointer place-items-center overflow-hidden rounded-3xl text-center">
-              {photo ? (
-                <img src={photo} alt="Your uploaded photo" className="size-full object-cover" />
-              ) : (
-                <div className="px-6">
-                  <div className="ai-gradient mx-auto grid size-12 place-items-center rounded-2xl text-primary-foreground">
-                    <Camera className="size-5" />
-                  </div>
-                  <p className="mt-4 font-display text-base font-semibold">Upload a photo of you</p>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    Only used to render your try-on preview. Your face and body stay unchanged.
-                  </p>
-                </div>
-              )}
-              <input
-                type="file"
-                accept="image/*"
-                className="sr-only"
-                onChange={async (e) => {
-                  const f = e.target.files?.[0];
-                  if (f) setPhoto(await fileToDataUrl(f));
-                }}
-              />
-            </label>
+          <div>
+            <div className="mb-5 flex items-center justify-between">
+              <div>
+                <h2 className="text-xl font-semibold">
+                  AI Outfit Recommendations
+                </h2>
 
-            <SectionTitle title="Pick an outfit" hint="Ranked for today" />
-            <div className="space-y-2">
-              {outfits.map((o) => (
-                <button
-                  key={o.key}
-                  type="button"
-                  onClick={() => setSelected(o.key)}
-                  className={cn(
-                    "surface-card w-full rounded-2xl p-3 text-left transition-colors",
-                    chosen?.key === o.key && "shadow-[inset_0_0_0_1.5px_var(--color-primary)]",
-                  )}
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="min-w-0 truncate text-sm font-medium">{o.title}</p>
-                    <ScorePill score={o.score} />
-                  </div>
-                  <div className="mt-2">
-                    <OutfitStrip outfit={o} />
-                  </div>
-                </button>
-              ))}
-            </div>
-
-            <Button
-              className="w-full"
-              disabled={!photo || !chosen || busy}
-              onClick={() => void run()}
-            >
-              <Wand2 className="size-4" /> {busy ? "Generating preview…" : "Generate try-on"}
-            </Button>
-          </section>
-
-          <section className="space-y-4">
-            <SectionTitle title="Preview" hint="AI-generated — fit may vary" />
-            <div className="surface-card grid aspect-3/4 place-items-center overflow-hidden rounded-3xl p-6 text-center">
-              {busy ? (
-                <p className="flex items-center gap-2 text-sm font-medium text-primary-glow">
-                  <Sparkles className="size-4" /> Dressing your photo…
+                <p className="text-sm text-muted-foreground">
+                  Your personalized looks will appear here.
                 </p>
-              ) : result?.imageDataUrl ? (
-                <img
-                  src={result.imageDataUrl}
-                  alt="AI try-on preview"
-                  className="size-full object-cover"
-                />
-              ) : (
-                <div>
-                  <p className="font-display text-base font-semibold">No preview yet</p>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    Upload your photo, pick one of the ranked outfits, then generate a preview.
-                  </p>
-                </div>
+              </div>
+
+              {outfits.length > 0 && (
+                <span className="rounded-full bg-muted px-3 py-1 text-sm">
+                  {outfits.length} looks
+                </span>
               )}
             </div>
-            <Badge variant="secondary">
-              {result?.note ?? "AI-generated preview — actual fit and appearance may vary."}
-            </Badge>
-          </section>
+
+            {busy && (
+              <div className="rounded-2xl border p-10 text-center">
+                <Sparkles className="mx-auto mb-4 h-10 w-10 animate-pulse" />
+
+                <h3 className="font-semibold">
+                  Creating your personalized outfits...
+                </h3>
+
+                <p className="mt-2 text-sm text-muted-foreground">
+                  AI is analyzing your profile and creating five different
+                  looks.
+                </p>
+              </div>
+            )}
+
+            {!busy && outfits.length === 0 && !error && (
+              <div className="rounded-2xl border border-dashed p-10 text-center">
+                <Sparkles className="mx-auto mb-4 h-10 w-10 opacity-50" />
+
+                <h3 className="font-semibold">
+                  No outfits yet
+                </h3>
+
+                <p className="mt-2 text-sm text-muted-foreground">
+                  Upload your photo and click Generate 5 Outfits.
+                </p>
+              </div>
+            )}
+
+            {!busy && outfits.length > 0 && (
+              <div className="grid gap-5 md:grid-cols-2">
+                {outfits.map((outfit) => (
+                  <div
+                    key={outfit.outfit_number}
+                    className="overflow-hidden rounded-2xl border bg-card shadow-sm"
+                  >
+                    <div className="border-b bg-muted/30 p-5">
+                      <div className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                        Outfit {outfit.outfit_number}
+                      </div>
+
+                      <h3 className="text-lg font-semibold">
+                        {outfit.outfit_name}
+                      </h3>
+                    </div>
+
+                    <div className="space-y-4 p-5">
+                      <div>
+                        <h4 className="text-sm font-semibold">
+                          Clothing
+                        </h4>
+
+                        <p className="mt-1 text-sm text-muted-foreground">
+                          {outfit.clothing}
+                        </p>
+                      </div>
+
+                      <div>
+                        <h4 className="text-sm font-semibold">
+                          Footwear
+                        </h4>
+
+                        <p className="mt-1 text-sm text-muted-foreground">
+                          {outfit.footwear}
+                        </p>
+                      </div>
+
+                      <div>
+                        <h4 className="text-sm font-semibold">
+                          Accessories
+                        </h4>
+
+                        <p className="mt-1 text-sm text-muted-foreground">
+                          {outfit.accessories}
+                        </p>
+                      </div>
+
+                      <div>
+                        <h4 className="text-sm font-semibold">
+                          Hairstyle
+                        </h4>
+
+                        <p className="mt-1 text-sm text-muted-foreground">
+                          {outfit.hairstyle}
+                        </p>
+                      </div>
+
+                      <div>
+                        <h4 className="text-sm font-semibold">
+                          Why it suits you
+                        </h4>
+
+                        <p className="mt-1 text-sm text-muted-foreground">
+                          {outfit.why_it_suits_her}
+                        </p>
+                      </div>
+
+                      <div>
+                        <h4 className="text-sm font-semibold">
+                          Style description
+                        </h4>
+
+                        <p className="mt-1 text-sm text-muted-foreground">
+                          {outfit.description_for_user}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
-      )}
+      </div>
     </AppShell>
-  );
-}
-
-function StyleProfileResult({
-  profile,
-  onChooseAnother,
-}: {
-  profile: StyleProfile;
-  onChooseAnother: () => void;
-}) {
-  return (
-    <div>
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">
-            StyleAI analysis
-          </p>
-          <h2 className="mt-2 font-display text-3xl font-semibold">Your Style Profile</h2>
-        </div>
-        <Button variant="outline" onClick={onChooseAnother}>
-          Choose another photo
-        </Button>
-      </div>
-      <p className="mt-5 max-w-3xl text-sm leading-6 text-muted-foreground">{profile.summary}</p>
-      <div className="mt-6 grid gap-4 sm:grid-cols-2">
-        <ProfileList title="Best Colors" values={profile.best_colors} />
-        <ProfileList title="Recommended Fits" values={profile.recommended_fits} />
-        <ProfileList title="Best Silhouettes" values={profile.recommended_silhouettes} />
-        <ProfileList title="Recommended Styles" values={profile.recommended_styles} />
-      </div>
-      <div className="mt-6">
-        <h3 className="font-display text-lg font-semibold">Recommended Clothing</h3>
-        <div className="mt-3 grid gap-3 sm:grid-cols-2">
-          {profile.recommended_items.map((item) => (
-            <div
-              key={`${item.category}-${item.item}`}
-              className="rounded-2xl border border-border p-4"
-            >
-              <p className="font-medium">{item.item}</p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                {item.category} · {item.color} · {item.fit}
-              </p>
-              <p className="mt-2 text-sm text-muted-foreground">{item.reason}</p>
-            </div>
-          ))}
-        </div>
-      </div>
-      <Button
-        className="mt-6"
-        disabled
-        onClick={() => toast.message("Outfit recommendations are coming next.")}
-      >
-        See Outfit Recommendations <ChevronRight className="size-4" />
-      </Button>
-    </div>
-  );
-}
-
-function ProfileList({ title, values }: { title: string; values: string[] }) {
-  return (
-    <div className="rounded-2xl border border-border p-4">
-      <h3 className="text-sm font-semibold">{title}</h3>
-      <p className="mt-2 text-sm leading-6 text-muted-foreground">
-        {values.join(" · ") || "No clear recommendation"}
-      </p>
-    </div>
   );
 }

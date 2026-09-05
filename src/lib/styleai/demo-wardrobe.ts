@@ -59,6 +59,69 @@ export const DEMO_WARDROBE: Seed[] = [
   { name: "Round Sunglasses", category: "Accessories", color: "Black", style: "Trendy", formality: 2 },
   { name: "Navy Knit Scarf", category: "Accessories", color: "Navy", style: "Classic", formality: 3, season: "winter" },
   { name: "Silver Chain", category: "Accessories", color: "Grey", style: "Streetwear", formality: 1 },
+  // PREMIUM SHIRTS
+{ name: "Black Satin Shirt", category: "Shirts", color: "Black", style: "Luxury", sleeve: "full", formality: 4 },
+{ name: "Mocha Cuban Collar Shirt", category: "Shirts", color: "Brown", style: "Trendy", sleeve: "short", formality: 2 },
+{ name: "Sage Green Resort Shirt", category: "Shirts", color: "Green", style: "Premium Casual", sleeve: "short", formality: 2 },
+{ name: "Stone Beige Shirt", category: "Shirts", color: "Beige", style: "Minimal", sleeve: "full", formality: 3 },
+{ name: "Ivory Premium Shirt", category: "Shirts", color: "Ivory", style: "Classic", sleeve: "full", formality: 4 },
+{ name: "Chocolate Linen Shirt", category: "Shirts", color: "Brown", style: "Luxury Casual", sleeve: "full", formality: 3 },
+{ name: "Sky Blue Oxford Shirt", category: "Shirts", color: "Blue", style: "Business Casual", sleeve: "full", formality: 4 },
+{ name: "Black Mandarin Shirt", category: "Shirts", color: "Black", style: "Modern", sleeve: "full", formality: 3 },
+
+// PREMIUM TEES
+{ name: "Essential Heavyweight Tee", category: "T-Shirts", color: "White", style: "Minimal", sleeve: "short", formality: 1 },
+{ name: "Premium Oversized Tee", category: "T-Shirts", color: "Cream", style: "Streetwear", sleeve: "short", formality: 1 },
+{ name: "Vintage Wash Tee", category: "T-Shirts", color: "Grey", style: "Trendy", sleeve: "short", formality: 1 },
+{ name: "Luxury Ribbed Tee", category: "T-Shirts", color: "Black", style: "Premium", sleeve: "short", formality: 1 },
+{ name: "Relaxed Fit Tee", category: "T-Shirts", color: "Olive", style: "Casual", sleeve: "short", formality: 1 },
+{ name: "Minimal Logo Tee", category: "T-Shirts", color: "Navy", style: "Minimal", sleeve: "short", formality: 1 },
+{ name: "Street Culture Tee", category: "T-Shirts", color: "Black", style: "Streetwear", sleeve: "short", formality: 1 },
+
+// PREMIUM JEANS
+{ name: "Vintage Blue Denim", category: "Jeans", color: "Blue", style: "Premium Casual", formality: 2 },
+{ name: "Jet Black Skinny Jeans", category: "Jeans", color: "Black", style: "Streetwear", formality: 2 },
+{ name: "Ice Blue Denim", category: "Jeans", color: "Blue", style: "Trendy", formality: 2 },
+{ name: "Charcoal Denim", category: "Jeans", color: "Grey", style: "Minimal", formality: 2 },
+{ name: "Stone Washed Denim", category: "Jeans", color: "Blue", style: "Vintage", formality: 2 },
+
+// TROUSERS
+{ name: "Italian Wool Trousers", category: "Trousers", color: "Charcoal", style: "Luxury Formal", formality: 5 },
+{ name: "Slim Beige Trousers", category: "Trousers", color: "Beige", style: "Business Casual", formality: 4 },
+{ name: "Cream Tailored Pants", category: "Trousers", color: "Cream", style: "Luxury", formality: 4 },
+{ name: "Black Executive Trousers", category: "Trousers", color: "Black", style: "Formal", formality: 5 },
+{ name: "Olive Smart Trousers", category: "Trousers", color: "Olive", style: "Smart Casual", formality: 3 },
+
+// STREETWEAR PANTS
+{ name: "Cargo Utility Pants", category: "Pants", color: "Khaki", style: "Streetwear", fit: "loose", formality: 1 },
+{ name: "Techwear Joggers", category: "Pants", color: "Black", style: "Techwear", fit: "loose", formality: 1 },
+{ name: "Wide Street Pants", category: "Pants", color: "Grey", style: "Streetwear", fit: "loose", formality: 1 },
+{ name: "Relaxed Cargo Pants", category: "Pants", color: "Olive", style: "Casual", fit: "loose", formality: 1 },
+
+// SHOES
+{ name: "Air Street Sneakers", category: "Shoes", color: "White", style: "Streetwear", formality: 2 },
+{ name: "Luxury Leather Sneakers", category: "Shoes", color: "White", style: "Luxury", formality: 3 },
+{ name: "Italian Leather Loafers", category: "Shoes", color: "Brown", style: "Classic", formality: 5 },
+{ name: "Premium Derby Shoes", category: "Shoes", color: "Black", style: "Formal", formality: 5 },
+{ name: "Chunky Fashion Sneakers", category: "Shoes", color: "Grey", style: "Trendy", formality: 2 },
+{ name: "Chelsea Boots", category: "Shoes", color: "Black", style: "Luxury", formality: 4 },
+
+// JACKETS
+{ name: "Varsity Bomber Jacket", category: "Jackets", color: "Black", style: "Streetwear", formality: 2 },
+{ name: "Luxury Trench Coat", category: "Jackets", color: "Beige", style: "Classic", formality: 5 },
+{ name: "Oversized Puffer Jacket", category: "Jackets", color: "Black", style: "Streetwear", formality: 2 },
+{ name: "Brown Suede Jacket", category: "Jackets", color: "Brown", style: "Luxury", formality: 4 },
+{ name: "Minimal Harrington Jacket", category: "Jackets", color: "Navy", style: "Smart Casual", formality: 3 },
+
+// ACCESSORIES
+{ name: "Luxury Silver Watch", category: "Accessories", color: "Silver", style: "Luxury", formality: 4 },
+{ name: "Black Designer Sunglasses", category: "Accessories", color: "Black", style: "Luxury", formality: 2 },
+{ name: "Premium Leather Wallet", category: "Accessories", color: "Brown", style: "Classic", formality: 3 },
+{ name: "Minimal Bracelet", category: "Accessories", color: "Silver", style: "Minimal", formality: 2 },
+{ name: "Luxury Chain", category: "Accessories", color: "Silver", style: "Streetwear", formality: 2 },
+{ name: "Premium Backpack", category: "Accessories", color: "Black", style: "Modern", formality: 2 },
+{ name: "Crossbody Bag", category: "Accessories", color: "Black", style: "Streetwear", formality: 2 },
+{ name: "Luxury Ring", category: "Accessories", color: "Silver", style: "Luxury", formality: 2 }
 ];
 
 export function demoWardrobeRows(userId: string) {
