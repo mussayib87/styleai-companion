@@ -107,7 +107,7 @@ function Home() {
         <div className="hero-wardrobe" aria-label="StyleAI editorial fashion edit">
   {[
     {
-      src: "/images/f3d635457878d692e8869282ca190931.jpg",
+      src: "https://images.unsplash.com/photo-1594938298603-c8148c4dae35?auto=format&fit=crop&w=900&q=90",
       alt: "Premium tailored shirts",
     },
     {
@@ -268,34 +268,28 @@ function HomeOutfitCard({ outfit }: { outfit: GeneratedOutfit }) {
   );
 }
 
-function AiPickVisual({ item }: { item: GeneratedOutfit["pieces"][number]["item"] }) {
-  const [imageFailed, setImageFailed] = useState(false);
-  const visual = getAiPickVisual(item);
-
-  if (visual && !imageFailed) {
+function AiPickVisual({
+  item,
+}: {
+  item: GeneratedOutfit["pieces"][number]["item"];
+}) {
+  if (item.image_url) {
     return (
       <img
-        src={visual.imageUrl}
-        alt={`${visual.category} fashion recommendation`}
+        src={item.image_url}
+        alt={item.name}
         loading="lazy"
-        className="size-full object-contain p-2 transition-transform duration-300 group-hover:scale-[1.03]"
-        onError={() => setImageFailed(true)}
+        className="size-full object-cover"
       />
     );
   }
 
   return (
-    <div className="grid size-full place-items-center bg-[#2c2119] px-2 text-center">
-      <div>
-        <Shirt className="mx-auto size-8 text-[#d7b67f]" strokeWidth={1.25} aria-hidden="true" />
-        <span className="mt-2 block text-[9px] font-semibold uppercase tracking-[0.12em] text-white/60">
-          Fashion item
-        </span>
-      </div>
+    <div className="grid size-full place-items-center bg-[#2c2119]">
+      <Shirt className="size-8 text-[#d7b67f]" />
     </div>
   );
 }
-
 function Stat({ label, value }: { label: string; value: number }) {
   return (
     <div className="surface-card rounded-2xl p-4">

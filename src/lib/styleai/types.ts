@@ -7,25 +7,34 @@ export const CATEGORIES = [
   "Jeans",
   "Trousers",
   "Shoes",
+  "Sneakers",
+  "Boots",
+  "Sandals",
   "Jackets",
-  "Dresses",
+  "Blazers",
+  "Hoodies",
+  "Sweaters",
   "Accessories",
+  "Watch",
+  "Belt",
+  "Cap",
+  "Bag",
   "Other",
 ] as const;
 
 export type Category = (typeof CATEGORIES)[number];
 
+
 export const STYLES = [
-  "Simple",
-  "Minimal",
-  "Trendy",
   "Casual",
   "Smart Casual",
   "Formal",
+  "Party",
   "Streetwear",
   "Classic",
+  "Minimal",
+  "Trendy",
 ] as const;
-
 export const FITS = ["loose", "regular", "fitted"] as const;
 
 export const OCCASIONS = [

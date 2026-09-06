@@ -186,16 +186,19 @@ function StylistPage() {
           content: reply.message,
         },
       ]);
-    } catch {
-      setMessages((m) => [
-        ...m,
-        {
-          role: "assistant",
-          content:
-            "I couldn't reach the stylist model just now. The ranked outfits below still come from your real wardrobe.",
-        },
-      ]);
-    } finally {
+    } catch (error) {
+  console.error("[STYLIST ERROR]", error);
+
+  setMessages((m) => [
+    ...m,
+    {
+      role: "assistant",
+      content:
+        "I couldn't reach the stylist model just now. The ranked outfits below still come from your real wardrobe.",
+    },
+  ]);
+}
+     finally {
       setThinking(false);
 
       requestAnimationFrame(() =>

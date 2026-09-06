@@ -1,7 +1,7 @@
 import Groq from "groq-sdk";
-console.log("GROQ KEY =", import.meta.env["VITE_GROQ_API_KEY"]);
+
 const groq = new Groq({
-  apiKey: import.meta.env["VITE_GROQ_API_KEY"],
+  apiKey: process.env["GROQ_API_KEY"],
 });
 
 export async function askStylist(
@@ -9,7 +9,7 @@ export async function askStylist(
   wardrobe: any[]
 ) {
   const completion = await groq.chat.completions.create({
-    model: "llama-3.3-70b-versatile",
+    model: "openai/gpt-oss-20b",
     messages: [
       {
         role: "system",
