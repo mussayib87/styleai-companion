@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import {
   ArrowUpRight,
   CalendarClock,
@@ -7,7 +7,6 @@ import {
   Shirt,
   ShoppingBag,
   Sparkles,
-  Upload,
   Wand2,
 } from "lucide-react";
 
@@ -23,8 +22,7 @@ import {
   useWardrobe,
 } from "@/lib/styleai/data";
 import { availableItems, combinationCount, generateOutfits } from "@/lib/styleai/engine";
-import type { GeneratedOutfit } from "@/lib/styleai/types";
-import { getAiPickVisual } from "@/lib/styleai/ai-pick-visuals";
+import type { GeneratedOutfit, WardrobeItem } from "@/lib/styleai/types";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -52,6 +50,31 @@ const QUICK_ACTIONS = [
   { to: "/shopping", label: "Should I buy?", icon: ShoppingBag },
 ] as const;
 
+const HERO_IMAGES = [
+  {
+    src: "https://images.unsplash.com/photo-1594938298603-c8148c4dae35?auto=format&fit=crop&w=900&q=90",
+    alt: "Premium tailored shirts",
+  },
+  {
+    src: "https://images.unsplash.com/photo-1598033129183-c4f50c736f10?auto=format&fit=crop&w=900&q=90",
+    alt: "Luxury dark shirt",
+  },
+  {
+    src: "https://images.unsplash.com/photo-1551028719-00167b16eac5?auto=format&fit=crop&w=900&q=90",
+    alt: "Premium jacket",
+  },
+  {
+    src: "https://images.unsplash.com/photo-1542272604-787c3835535d?auto=format&fit=crop&w=900&q=90",
+    alt: "Curated wardrobe piece",
+  },
+] as const;
+
+function getWardrobeTimestamp(item: WardrobeItem): number {
+  const value = item.created_at ?? item.updated_at;
+  const time = value ? new Date(value).getTime() : NaN;
+  return Number.isNaN(time) ? 0 : time;
+}
+
 function Home() {
   const { data: profile } = useProfile();
   const { data: prefs } = usePrefs();
@@ -75,12 +98,32 @@ function Home() {
     [items, prefs],
   );
 
+  const latestWardrobeItems = useMemo(() => {
+    const seenIds = new Set<string>();
+    const seenImages = new Set<string>();
+
+    return [...items]
+      .sort((a, b) => getWardrobeTimestamp(b) - getWardrobeTimestamp(a))
+      .filter((item) => {
+        if (seenIds.has(item.id)) return false;
+        seenIds.add(item.id);
+
+        if (item.image_url) {
+          if (seenImages.has(item.image_url)) return false;
+          seenImages.add(item.image_url);
+        }
+
+        return true;
+      })
+      .slice(0, 4);
+  }, [items]);
+
   const ready = availableItems(items).length;
 
   return (
     <AppShell
       className="fashion-home"
-      title={`Hi ${profile?.display_name?.trim() || "Mussayib"} 👋`}
+      title={`Hi ${profile?.display_name?.trim() || "there"} 👋`}
       subtitle="Your AI Stylist is ready to elevate your style ✨"
     >
       <div className="space-y-10 overflow-x-hidden pb-4">
@@ -104,37 +147,58 @@ function Home() {
               </Link>
             </Button>
           </div>
-        <div className="hero-wardrobe" aria-label="StyleAI editorial fashion edit">
-  {[
-    {
-      src: "https://images.unsplash.com/photo-1594938298603-c8148c4dae35?auto=format&fit=crop&w=900&q=90",
-      alt: "Premium tailored shirts",
-    },
-    {
-      src: "https://images.unsplash.com/photo-1598033129183-c4f50c736f10?auto=format&fit=crop&w=900&q=90",
-      alt: "Luxury dark shirt",
-    },
-    {
-      src: "https://images.unsplash.com/photo-1551028719-00167b16eac5?auto=format&fit=crop&w=900&q=90",
-      alt: "Premium jacket",
-    },
-    {
-      src: "https://images.unsplash.com/photo-1542272604-787c3835535d?auto=format&fit=crop&w=900&q=90",
-
-    },
-  ].map((image, index) => (
-    <div key={image.src} className={`hero-piece hero-piece-${index + 1}`}>
-      <img src={image.src} alt={image.alt} className="size-full object-cover" />
-    </div>
-  ))}
-  <span className="hero-caption">YOUR EDIT / 01</span>
-</div>
+          <div className="hero-wardrobe" aria-label="StyleAI editorial fashion edit">
+            {HERO_IMAGES.map((image, index) => (
+              <div key={image.src} className={`hero-piece hero-piece-${index + 1}`}>
+                <img src={image.src} alt={image.alt} className="size-full object-cover" />
+              </div>
+            ))}
+            <span className="hero-caption">YOUR EDIT / 01</span>
+          </div>
         </section>
 
         <section className="grid gap-3 sm:grid-cols-3">
           <Stat label="Items in wardrobe" value={items.length} />
           <Stat label="Ready to wear" value={ready} />
           <Stat label="Possible combinations" value={combinationCount(items)} />
+        </section>
+
+        <section>
+          <SectionTitle title="Wardrobe ✨" hint="Your most recently added pieces" />
+          {isLoading ? (
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <Skeleton className="aspect-square rounded-2xl" />
+              <Skeleton className="aspect-square rounded-2xl" />
+              <Skeleton className="aspect-square rounded-2xl" />
+              <Skeleton className="aspect-square rounded-2xl" />
+            </div>
+          ) : latestWardrobeItems.length ? (
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              {latestWardrobeItems.map((item) => (
+                <WardrobeThumbnail key={item.id} item={item} />
+              ))}
+            </div>
+          ) : (
+            <EmptyState
+              icon={<Shirt className="size-5" />}
+              title="Your wardrobe is empty"
+              body="Add a few pieces — or load a demo wardrobe — and StyleAI will start ranking outfits for you."
+              action={
+                <div className="flex flex-wrap justify-center gap-2">
+                  <Button asChild>
+                    <Link to="/wardrobe/add">Add clothes</Link>
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    onClick={() => seed.mutate()}
+                    disabled={seed.isPending}
+                  >
+                    {seed.isPending ? "Loading demo…" : "Load demo wardrobe"}
+                  </Button>
+                </div>
+              }
+            />
+          )}
         </section>
 
         <section>
@@ -227,6 +291,31 @@ function Home() {
   );
 }
 
+function WardrobeThumbnail({ item }: { item: WardrobeItem }) {
+  return (
+    <div className="surface-card overflow-hidden rounded-2xl">
+      <div className="aspect-square bg-[#e7dacb]">
+        {item.image_url ? (
+          <img
+            src={item.image_url}
+            alt={item.name}
+            loading="lazy"
+            className="size-full object-cover"
+          />
+        ) : (
+          <div className="grid size-full place-items-center bg-[#2c2119]">
+            <Shirt className="size-8 text-[#d7b67f]" />
+          </div>
+        )}
+      </div>
+      <div className="p-2.5">
+        <p className="truncate text-xs font-semibold">{item.name}</p>
+        <p className="mt-0.5 truncate text-[11px] text-muted-foreground">{item.category}</p>
+      </div>
+    </div>
+  );
+}
+
 function HomeOutfitCard({ outfit }: { outfit: GeneratedOutfit }) {
   const feedback = useFeedback();
   return (
@@ -290,6 +379,7 @@ function AiPickVisual({
     </div>
   );
 }
+
 function Stat({ label, value }: { label: string; value: number }) {
   return (
     <div className="surface-card rounded-2xl p-4">
