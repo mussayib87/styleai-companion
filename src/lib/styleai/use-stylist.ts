@@ -54,9 +54,14 @@ export function useStylistContext() {
       preferredStyles: prefs.data?.styles ?? [],
       preferredColors: prefs.data?.colors ?? [],
       preferredFit: prefs.data?.fit ?? "regular",
-      weather: weather.data
-        ? { condition: weather.data.condition, tempC: weather.data.tempC }
-        : undefined,
+   ...(weather.data
+  ? {
+      weather: {
+        temperature: weather.data.tempC,
+        condition: weather.data.condition,
+      },
+    }
+  : {}),
     };
   }, [history.data, feedback.data, prefs.data, weather.data]);
 

@@ -1,5 +1,7 @@
 import { Type } from "@google/genai";
 import type { StyleProfile } from "./styleai/types";
+import { askStylist } from "./styleai/groq";
+
 
 /**
  * AI provider boundary. Everything model-specific lives here, so the provider
@@ -109,22 +111,22 @@ function isStringArray(value: unknown): value is string[] {
 function isStyleProfile(value: unknown): value is StyleProfile {
   if (!value || typeof value !== "object") return false;
   const profile = value as Record<string, unknown>;
-  const face = profile.face as Record<string, unknown> | null;
-  const hair = profile.hair as Record<string, unknown> | null;
-  const silhouette = profile.silhouette as Record<string, unknown> | null;
-  const items = profile.recommended_items;
+  const face = profile["face"] as Record<string, unknown> | null;
+  const hair = profile["hair"] as Record<string, unknown> | null;
+  const silhouette = profile["silhouette"] as Record<string, unknown> | null;
+  const items = profile["recommended_items"];
   return (
-    typeof profile.summary === "string" &&
+    typeof profile["summary"] === "string" &&
     !!face &&
-    typeof face.shape === "string" &&
+    typeof face["shape"] === "string" &&
     !!hair &&
-    typeof hair.description === "string" &&
+    typeof hair["description"] === "string" &&
     !!silhouette &&
-    typeof silhouette.description === "string" &&
-    isStringArray(profile.best_colors) &&
-    isStringArray(profile.recommended_fits) &&
-    isStringArray(profile.recommended_silhouettes) &&
-    isStringArray(profile.recommended_styles) &&
+    typeof silhouette["description"] === "string" &&
+    isStringArray(profile["best_colors"]) &&
+    isStringArray(profile["recommended_fits"]) &&
+    isStringArray(profile["recommended_silhouettes"]) &&
+    isStringArray(profile["recommended_styles"]) &&
     Array.isArray(items) &&
     items.every((item) => {
       if (!item || typeof item !== "object") return false;
@@ -328,6 +330,7 @@ function mockAnalysis(): ClothingAnalysis {
 
 export type StylistReply = { message: string; mocked?: boolean };
 
+
 export async function chatWithStylist(input: {
   question: string;
   wardrobeSummary: string;
@@ -335,30 +338,20 @@ export async function chatWithStylist(input: {
   planSummary: string;
   history: { role: "user" | "assistant"; content: string }[];
 }): Promise<StylistReply> {
-  if (!key()) {
-    return {
-      message:
-        "Demo mode: AI replies are simulated right now, but your wardrobe engine is live. Try “Style Me” on the home screen — those outfits are generated from your real wardrobe.",
-      mocked: true,
-    };
+  if (!process.env["GROQ_API_KEY"]){
+    throw new Error("GROQ_API_KEY missing");
   }
-  const message = await chat([
-    {
-      role: "system",
-      content: `You are StyleAI, a personal stylist that only recommends from the user's own wardrobe.
-Never comment on the user's body or attractiveness. Be concise, warm, practical.
-Refer to real item names. If something is unavailable (laundry) say so.
 
-USER PROFILE: ${input.profileSummary}
-WARDROBE: ${input.wardrobeSummary}
-THIS WEEK'S PLAN: ${input.planSummary}`,
-    },
-    ...input.history.slice(-8),
-    { role: "user", content: input.question },
-  ]);
-  return { message: message || "I couldn't put that look together. Try asking again." };
+  const message = await askStylist(
+    input.question,
+    [input.wardrobeSummary]
+  );
+
+  return {
+    message:
+      message || "I couldn't put that look together. Try asking again.",
+  };
 }
-
 export type ShoppingAnalysis = {
   product_name: string;
   category: string;

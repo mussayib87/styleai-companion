@@ -1520,47 +1520,74 @@ export function combinationCount(
     dressCount
   );
 }
-
-export function planWeek(
+export type PlannedDay = {
+  date: string;
+  label: string;
+  occasion: string;
+  outfit: GeneratedOutfit | null;
+};export function planWeek(
   items: WardrobeItem[],
-  contexts: StylistContext[],
-): GeneratedOutfit[][] {
-  const usedItemIds =
-    new Set<string>();
+  weekStart: Date,
+  routine: Record<string, string>,
+  base: StylistContext,
+  locked: Record<string, GeneratedOutfit> = {},
+): PlannedDay[] {
+  const usedItemIds = new Set<string>();
 
-  return contexts.map(
-    (context) => {
-      const outfits =
-        generateOutfits(
-          items,
-          {
-            ...context,
-            recentItemIds: [
-              ...(context.recentItemIds ??
-                []),
-              ...Array.from(
-                usedItemIds,
-              ),
-            ],
-          },
-          1,
-        );
+  const labels = [
+    "Monday",
+    "Tuesday",
+    "Wednesday",
+    "Thursday",
+    "Friday",
+    "Saturday",
+    "Sunday",
+  ];
 
-      for (
-        const outfit of outfits
-      ) {
-        for (
-          const piece of outfit.pieces
-        ) {
-          usedItemIds.add(
-            piece.item.id,
-          );
-        }
-      }
+  return labels.map((label, index) => {
+    const date = new Date(weekStart);
+    date.setDate(date.getDate() + index);
 
-      return outfits;
-    },
-  );
+    const dateStr = date.toISOString().slice(0, 10);
+
+    // locked outfit
+  if (locked[dateStr]) {
+  locked[dateStr].pieces.forEach((piece) => {
+    usedItemIds.add(piece.item.id);
+  });
+
+  return {
+    date: dateStr,
+    label,
+    occasion: routine[label] ?? "Casual",
+    outfit: locked[dateStr],
+  };
+}
+    const outfits = generateOutfits(
+      items,
+      {
+        ...base,
+        occasion: routine[label] ?? "Casual",
+        recentItemIds: Array.from(usedItemIds),
+      },
+      1,
+    );
+
+    const outfit = outfits[0] ?? null;
+
+    if (outfit) {
+      outfit.pieces.forEach((piece) => {
+        usedItemIds.add(piece.item.id);
+      });
+    }
+
+    return {
+      date: dateStr,
+      label,
+      occasion: routine[label] ?? "Casual",
+      outfit,
+    };
+  });
 }
 
 export function startOfWeek(

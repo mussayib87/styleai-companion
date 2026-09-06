@@ -12,9 +12,12 @@ export function ItemSwatch({
   item,
   className,
 }: {
-  item: Pick<WardrobeItem, "color" | "pattern" | "image_url" | "name">;
+  item: Pick<
+    WardrobeItem,
+    "id" | "category" | "name" | "color" | "pattern" | "image_url"
+  >;
   className?: string;
-}) {
+}){
   const [imageFailed, setImageFailed] = useState(false);
   const [fallbackFailed, setFallbackFailed] = useState(false);
   if (item.image_url && !imageFailed) {

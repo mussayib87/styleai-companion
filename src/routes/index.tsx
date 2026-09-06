@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 
 import { AppShell } from "@/components/styleai/app-shell";
-import { EmptyState, ItemSwatch, SectionTitle } from "@/components/styleai/pieces";
+import { EmptyState, SectionTitle } from "@/components/styleai/pieces";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -104,15 +104,31 @@ function Home() {
               </Link>
             </Button>
           </div>
-          <div className="hero-wardrobe" aria-label="Your wardrobe edit">
-            {items.slice(0, 4).map((item, index) => (
-              <div key={item.id} className={`hero-piece hero-piece-${index + 1}`}>
-                <ItemSwatch item={item} />
-              </div>
-            ))}
-            {!items.length && <div className="hero-rack" aria-hidden />}
-            <span className="hero-caption">YOUR EDIT / 01</span>
-          </div>
+        <div className="hero-wardrobe" aria-label="StyleAI editorial fashion edit">
+  {[
+    {
+      src: "/images/f3d635457878d692e8869282ca190931.jpg",
+      alt: "Premium tailored shirts",
+    },
+    {
+      src: "https://images.unsplash.com/photo-1598033129183-c4f50c736f10?auto=format&fit=crop&w=900&q=90",
+      alt: "Luxury dark shirt",
+    },
+    {
+      src: "https://images.unsplash.com/photo-1551028719-00167b16eac5?auto=format&fit=crop&w=900&q=90",
+      alt: "Premium jacket",
+    },
+    {
+      src: "https://images.unsplash.com/photo-1542272604-787c3835535d?auto=format&fit=crop&w=900&q=90",
+
+    },
+  ].map((image, index) => (
+    <div key={image.src} className={`hero-piece hero-piece-${index + 1}`}>
+      <img src={image.src} alt={image.alt} className="size-full object-cover" />
+    </div>
+  ))}
+  <span className="hero-caption">YOUR EDIT / 01</span>
+</div>
         </section>
 
         <section className="grid gap-3 sm:grid-cols-3">
